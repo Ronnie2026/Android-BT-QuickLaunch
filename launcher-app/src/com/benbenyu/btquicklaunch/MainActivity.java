@@ -224,6 +224,7 @@ public class MainActivity extends Activity {
     setShowWhenLocked(true);
     getWindow().getDecorView().setSystemUiVisibility(5894);
     p = getSharedPreferences("home", 0);
+    if (b == null && p.getBoolean("disable_ime", true)) ImeGuard.apply(this, p, true, false);
     draw();
     if (getIntent().hasExtra("button_action")) button(getIntent());
     else {
@@ -234,12 +235,14 @@ public class MainActivity extends Activity {
             () -> {
               for (int i = 0; i < 4; i++)
                 if (get(i, "pkg", pkgs[i]).equals("com.openai.chatgpt")) {
-                  launch(i);
-                  break;
+                  if (!needsProxy(i, "com.openai.chatgpt")) ensureProxyOnStart();
+                  launch(i); // a guarded GPT launch already ensures the proxy
+                  return;
                 }
+              ensureProxyOnStart();
             },
             800);
-      }
+      } else if (b == null) ensureProxyOnStart();
     }
   }
 
@@ -557,7 +560,10 @@ public class MainActivity extends Activity {
         info.addView(label);
         TextView hint =
             text(
-                get(n, "pkg", pkgs[n]).equals("com.openai.chatgpt") ? "智能联网 · 自动语音" : "轻点更换应用", 12);
+                supportsVoice(get(n, "pkg", pkgs[n])) && p.getBoolean(n + "voice", true)
+                    ? "智能联网 · 自动语音"
+                    : needsProxy(n, get(n, "pkg", pkgs[n])) ? "智能联网 · 轻点更换应用" : "轻点更换应用",
+                12);
         hint.setTextColor(0xff9ba9b9);
         hint.setPadding(dp(12), 0, 0, 0);
         info.addView(hint);
@@ -657,6 +663,70 @@ public class MainActivity extends Activity {
           settingsPanel();
         });
     Switch idle=new Switch(this);idle.setText("2 分钟无活动自动最暗（触摸或 HID 立即恢复）");idle.setTextColor(p.getBoolean("paper_theme",false)?0xff252525:Color.WHITE);idle.setChecked(p.getBoolean("idle_power",true));body.addView(idle);idle.setOnCheckedChangeListener((v,on)->{p.edit().putBoolean("idle_power",on).apply();if(idlePower!=null){idlePower.setDim(false);idlePower.activity("setting");}});
+    body.addView(text("输入法与语音", 20));
+    int fg = p.getBoolean("paper_theme", false) ? 0xff252525 : Color.WHITE;
+    LinearLayout imeRow = new LinearLayout(this);
+    imeRow.setGravity(Gravity.CENTER_VERTICAL);
+    TextView imeInfo = new TextView(this);
+    imeInfo.setText("ⓘ");
+    imeInfo.setTextSize(18);
+    imeInfo.setTextColor(0xff7cb3ff);
+    imeInfo.setPadding(dp(8), dp(6), dp(10), dp(6));
+    imeInfo.setContentDescription("完全禁用输入法说明");
+    imeInfo.setOnClickListener(
+        v ->
+            new AlertDialog.Builder(this)
+                .setTitle("完全禁用输入法")
+                .setMessage(
+                    "开启后（默认开启）：\n"
+                        + "• 自动禁用系统所有软键盘输入法，保持纯粹的语音交互体验。\n"
+                        + "• 防止进入 Gemini / ChatGPT 等应用时自动弹出输入法，避免键盘遮挡底部的语音按钮，大幅提高自动模拟点击进入语音模式的成功率。\n\n"
+                        + "需要打字时：\n"
+                        + "• 临时关闭此开关即可自动恢复原输入法，进入应用后即可正常使用键盘。")
+                .setPositiveButton("知道了", null)
+                .show());
+    imeRow.addView(imeInfo);
+    Switch imeSwitch = new Switch(this);
+    imeSwitch.setText("完全禁用输入法（默认开启，保持纯语音）");
+    imeSwitch.setTextColor(fg);
+    imeSwitch.setChecked(p.getBoolean("disable_ime", true));
+    imeRow.addView(imeSwitch, new LinearLayout.LayoutParams(0, -2, 1));
+    imeSwitch.setOnCheckedChangeListener(
+        (v, on) -> {
+          p.edit().putBoolean("disable_ime", on).apply();
+          ImeGuard.apply(this, p, on, true);
+        });
+    body.addView(imeRow);
+    TextView imeHint = text("禁用输入法有助于提高按钮模拟点击的成功率，避免输入法弹出遮挡语音按钮", 12);
+    imeHint.setTextColor(0xff919cab);
+    imeHint.setPadding(dp(12), 0, dp(12), dp(8));
+    body.addView(imeHint);
+    body.addView(text("网络与代理", 20));
+    Switch guard = new Switch(this);
+    guard.setText("海外应用启动前检测 VPN，未开启则自动启用 Clash Meta");
+    guard.setTextColor(fg);
+    guard.setChecked(p.getBoolean("proxy_guard", true));
+    body.addView(guard);
+    guard.setOnCheckedChangeListener((v, on) -> p.edit().putBoolean("proxy_guard", on).apply());
+    Switch bootProxy = new Switch(this);
+    bootProxy.setText("桌面启动时检测 VPN，未运行则自动启动 Clash Meta");
+    bootProxy.setTextColor(fg);
+    bootProxy.setChecked(p.getBoolean("proxy_on_boot", true));
+    body.addView(bootProxy);
+    bootProxy.setOnCheckedChangeListener(
+        (v, on) -> p.edit().putBoolean("proxy_on_boot", on).apply());
+    Button proxyAppsBtn = new Button(this);
+    proxyAppsBtn.setText("配置需检测 VPN 的应用（已配置 " + ProxyGuard.configuredApps(p).size() + " 项）  ›");
+    body.addView(proxyAppsBtn);
+    proxyAppsBtn.setOnClickListener(v -> pickProxyApps());
+    body.addView(
+        text("默认包含 ChatGPT / Grok / Gemini，可在上方随时增删任何已安装应用。仅做本地检测（VPN 隧道、本地端口、Clash 进程），不发起外网探测请求。", 13));
+    TextView diag = text("点击下方按钮查看当前本地网络与 VPN 状态", 14);
+    Button check = new Button(this);
+    check.setText("立即检测 VPN 与代理状态");
+    body.addView(check);
+    body.addView(diag);
+    check.setOnClickListener(v -> proxyDiagnose(diag));
     body.addView(text("显示与状态", 20));
     Switch breathing = new Switch(this);
     breathing.setText("后台横线呼吸动画");
@@ -729,7 +799,7 @@ public class MainActivity extends Activity {
                     .setType("application/zip")
                     .addCategory(Intent.CATEGORY_OPENABLE),
                 94));
-    body.addView(text("BT QuickLaunch 1.1.0 · 双击 1/2/3 启动 · 三键清理", 14));
+    body.addView(text("BT QuickLaunch 1.2.0 · 双击 1/2/3 启动 · 三键清理", 14));
   }
 
   void fillWallpapers(LinearLayout content) {
@@ -819,11 +889,15 @@ public class MainActivity extends Activity {
     }
   }
 
+  boolean supportsVoice(String pkg) {
+    return "com.openai.chatgpt".equals(pkg) || "com.google.android.apps.bard".equals(pkg);
+  }
+
   void open(String pkg, boolean voice) {
-    if (voice && pkg.equals("com.openai.chatgpt")) ButtonService.requestVoice();
+    if (voice && supportsVoice(pkg)) ButtonService.requestVoice(pkg);
     try {
       Intent in =
-          voice
+          voice && pkg.equals("com.openai.chatgpt")
               ? new Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://chatgpt.com/voice"))
                   .setPackage(pkg)
               : getPackageManager().getLaunchIntentForPackage(pkg);
@@ -844,8 +918,13 @@ public class MainActivity extends Activity {
     busy = true;
     final int generation = launchGeneration;
     final String pkg = get(i, "pkg", pkgs[i]);
+    if (needsProxy(i, pkg)) {
+      guardedLaunch(i, generation, pkg, false, 0);
+      return;
+    }
     if (pkg.equals("com.openai.chatgpt")) {
-      checkGpt(i, generation, false, 0);
+      busy = false;
+      open(pkg, p.getBoolean(i + "voice", true));
       return;
     }
     String before = get(i, "before", "");
@@ -854,50 +933,106 @@ public class MainActivity extends Activity {
         () -> {
           if (generation != launchGeneration) return;
           busy = false;
-          open(pkg, false);
+          open(pkg, supportsVoice(pkg) && p.getBoolean(i + "voice", true));
         },
         before.isEmpty() ? 0 : p.getInt(i + "delay", 3000));
   }
 
-  void checkGpt(int i, int generation, boolean proxy, int attempt) {
+  /** Overseas apps (GPT / Grok / Gemini / user-configured) check the network first when the guard is on. */
+  boolean needsProxy(int i, String pkg) {
+    return p.getBoolean("proxy_guard", true) && ProxyGuard.shouldGuard(p, pkg);
+  }
+
+  static final int PROXY_RETRIES = 4, NETWORK_WAITS = 3;
+
+  /**
+   * Launch flow (local-only, no external HTTPS probes):
+   * baseNetwork && proxyRunning -> open.
+   * Device offline -> wait a few times.
+   * VPN/proxy missing -> start Clash Meta once and re-check.
+   * GPT never forces a voice call when VPN/network is down; other apps still open after a warning.
+   */
+  void guardedLaunch(int i, int generation, String pkg, boolean started, int attempt) {
     networkWorker.execute(
+        () -> {
+          ProxyGuard.Status s = ProxyGuard.check(this);
+          h.post(
+              () -> {
+                if (generation != launchGeneration || isDestroyed()) return;
+                boolean gpt = pkg.equals("com.openai.chatgpt");
+                if (s.ready()) {
+                  busy = false;
+                  open(pkg, supportsVoice(pkg) && p.getBoolean(i + "voice", true));
+                  return;
+                }
+                if (!s.baseNetwork) {
+                  if (attempt < NETWORK_WAITS) {
+                    if (attempt == 0) Toast.makeText(this, "等待网络连接…", 0).show();
+                    retryGuarded(i, generation, pkg, started, attempt + 1, 2000);
+                  } else failGuarded(pkg, gpt, "设备未联网，请检查 Wi-Fi 或移动数据");
+                  return;
+                }
+                if (!started) {
+                  if (!ProxyGuard.installed(this)) {
+                    failGuarded(pkg, gpt, "未检测到 VPN 代理，且未安装 Clash Meta");
+                    return;
+                  }
+                  Toast.makeText(this, "未检测到 VPN，正在启动 Clash Meta…", 0).show();
+                  ProxyGuard.start(this);
+                  retryGuarded(i, generation, pkg, true, 1, 1500);
+                  return;
+                }
+                if (attempt < PROXY_RETRIES) {
+                  retryGuarded(i, generation, pkg, true, attempt + 1, 1500);
+                  return;
+                }
+                failGuarded(pkg, gpt, "未检测到 Clash Meta VPN 运行，请手动检查");
+              });
+        });
+  }
+
+  void retryGuarded(int i, int generation, String pkg, boolean started, int attempt, long delay) {
+    h.postDelayed(
+        () -> {
+          if (generation == launchGeneration) guardedLaunch(i, generation, pkg, started, attempt);
+        },
+        delay);
+  }
+
+  void failGuarded(String pkg, boolean gpt, String reason) {
+    AppLog.write("GUARD_NETWORK_FAILED pkg=" + pkg + " reason=" + reason, null);
+    busy = false;
+    if (gpt) {
+      Toast.makeText(this, reason + "（未进入语音通话）", 1).show();
+    } else {
+      Toast.makeText(this, reason, 1).show();
+      open(pkg, false);
+    }
+  }
+
+  /** On desktop start: if the VPN/proxy is not running, start Clash Meta in the background. */
+  void ensureProxyOnStart() {
+    if (!p.getBoolean("proxy_on_boot", true) || !ProxyGuard.installed(this)) return;
+    networkWorker.execute(
+        () -> {
+          ProxyGuard.Status s = ProxyGuard.check(this);
+          h.post(
+              () -> {
+                if (isDestroyed() || s.proxyRunning() || !s.baseNetwork) return;
+                AppLog.write("BOOT_PROXY_START", null);
+                ProxyGuard.start(this);
+              });
+        });
+  }
+
+  void proxyDiagnose(TextView out) {
+    out.setText("检测中…");
+    new Thread(
             () -> {
-              boolean online = NetworkCheck.reachable();
-              h.post(
-                  () -> {
-                    if (generation != launchGeneration || isDestroyed()) return;
-                    if (online) {
-                      busy = false;
-                      open(get(i, "pkg", pkgs[i]), p.getBoolean(i + "voice", true));
-                      return;
-                    }
-                    if (!proxy) {
-                      try {
-                        AppLog.write("PROXY_START", null);
-                        startActivity(
-                            new Intent("com.github.metacubex.clash.meta.action.START_CLASH"));
-                      } catch (Exception e) {
-                        open("com.github.metacubex.clash.meta", false);
-                      }
-                      h.postDelayed(
-                          () -> {
-                            if (generation == launchGeneration) checkGpt(i, generation, true, 1);
-                          },
-                          1500);
-                    } else if (attempt < 3) {
-                      h.postDelayed(
-                          () -> {
-                            if (generation == launchGeneration)
-                              checkGpt(i, generation, true, attempt + 1);
-                          },
-                          1500);
-                    } else {
-                      AppLog.write("GPT_NETWORK_FAILED after_proxy", null);
-                      busy = false;
-                      Toast.makeText(this, "代理已启动，但外网仍不可达，请检查 Clash 配置后重试", 1).show();
-                    }
-                  });
-            });
+              ProxyGuard.Status s = ProxyGuard.check(this);
+              runOnUiThread(() -> out.setText(s.summary()));
+            })
+        .start();
   }
 
   protected void onDestroy() {
@@ -910,16 +1045,36 @@ public class MainActivity extends Activity {
   void configure(int i) {
     detailPage("位置 " + (i + 1) + " · 启动设置");
     option("更换目标应用", () -> pick(i, false));
-    boolean gpt = get(i, "pkg", pkgs[i]).equals("com.openai.chatgpt");
+    String slotPkg = get(i, "pkg", pkgs[i]);
+    boolean gpt = slotPkg.equals("com.openai.chatgpt");
+    Switch proxy = new Switch(this);
+    proxy.setText("启动前检测 VPN，未开启则自动启用 Clash Meta");
+    proxy.setTextColor(Color.WHITE);
+    proxy.setChecked(ProxyGuard.shouldGuard(p, slotPkg));
+    settingsContent.addView(proxy);
+    proxy.setOnCheckedChangeListener(
+        (v, on) -> {
+          ProxyGuard.setGuarded(p, slotPkg, on);
+          draw();
+        });
+    if (!p.getBoolean("proxy_guard", true))
+      settingsContent.addView(text("提示：“其他设置 → 网络与代理”总开关已关闭，此项暂不生效。", 13));
     if (gpt) {
-      settingsContent.addView(text("GPT 特殊规则：先检查外网，不通则启动 Clash 并复检；复检失败不会强行进入通话。", 14));
+      settingsContent.addView(text("GPT 特殊规则：先检查设备联网与 VPN；未开启则启动 Clash 并复检；复检失败不会强行进入通话。", 14));
+    }
+    if (supportsVoice(slotPkg)) {
       Switch voice = new Switch(this);
-      voice.setText("自动进入语音通话");
+      voice.setText(gpt ? "自动进入语音通话" : "自动进入 Gemini Live 语音（会先收起键盘）");
       voice.setTextColor(Color.WHITE);
       voice.setChecked(p.getBoolean(i + "voice", true));
       settingsContent.addView(voice);
-      voice.setOnCheckedChangeListener((v, on) -> p.edit().putBoolean(i + "voice", on).apply());
-    } else {
+      voice.setOnCheckedChangeListener(
+          (v, on) -> {
+            p.edit().putBoolean(i + "voice", on).apply();
+            draw();
+          });
+    }
+    if (!gpt) {
       option("设置前置应用", () -> pick(i, true));
       option(
           "取消前置应用",
@@ -1180,10 +1335,7 @@ public class MainActivity extends Activity {
                   if (pkg.matches("[a-zA-Z0-9_.]+")
                       && !Arrays.asList(
                               "com.benbenyu.btquicklaunch",
-                              "com.github.metacubex.clash.meta",
-                              "io.github.sds100.keymapper",
-                              "com.arlosoft.macrodroid",
-                              "dev.ukanth.ufirewall")
+                              "com.github.metacubex.clash.meta")
                           .contains(pkg)) cmd.append("am force-stop ").append(pkg).append(" || result=1; ");
                 java.lang.Process process = new ProcessBuilder("su", "-c", cmd.append("exit $result").toString()).start();
                 if (!process.waitFor(8, java.util.concurrent.TimeUnit.SECONDS)) {
@@ -1294,12 +1446,120 @@ public class MainActivity extends Activity {
             p.edit()
                 .remove(i + "icon")
                 .putString(i + "name", app.loadLabel(getPackageManager()).toString())
-                .putBoolean(i + "voice", app.activityInfo.packageName.equals("com.openai.chatgpt"))
+                .putBoolean(i + "voice", supportsVoice(app.activityInfo.packageName))
                 .apply();
           ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
               .hideSoftInputFromWindow(search.getWindowToken(), 0);
           draw();
           settingsPanel();
+        });
+  }
+
+  void pickProxyApps() {
+    settingsTab = 2;
+    detailPage("需检测代理的应用（点击切换）");
+    EditText search = new EditText(this);
+    search.setSingleLine();
+    search.setTextColor(p.getBoolean("paper_theme", false) ? 0xff252525 : Color.WHITE);
+    search.setHintTextColor(0xff919cab);
+    search.setHint("搜索已安装应用（新安装的应用也会自动出现在此）");
+    settingsContent.addView(search);
+    List<ResolveInfo> apps =
+        getPackageManager()
+            .queryIntentActivities(
+                new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0);
+    Collections.sort(
+        apps,
+        (x, y) -> {
+          boolean gx = ProxyGuard.shouldGuard(p, x.activityInfo.packageName);
+          boolean gy = ProxyGuard.shouldGuard(p, y.activityInfo.packageName);
+          if (gx != gy) return gx ? -1 : 1;
+          return x.loadLabel(getPackageManager())
+              .toString()
+              .compareToIgnoreCase(y.loadLabel(getPackageManager()).toString());
+        });
+    ListView list = new ListView(this);
+    settingsContent.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
+    ArrayList<ResolveInfo> filtered = new ArrayList<>();
+    BaseAdapter adapter =
+        new BaseAdapter() {
+          public int getCount() {
+            return filtered.size();
+          }
+
+          public Object getItem(int pos) {
+            return filtered.get(pos);
+          }
+
+          public long getItemId(int pos) {
+            return pos;
+          }
+
+          public View getView(int pos, View reuse, android.view.ViewGroup parent) {
+            ResolveInfo app = filtered.get(pos);
+            String pkg = app.activityInfo.packageName;
+            boolean on = ProxyGuard.shouldGuard(p, pkg);
+            LinearLayout row = new LinearLayout(MainActivity.this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(12), dp(8), dp(12), dp(8));
+            ImageView icon = new ImageView(MainActivity.this);
+            icon.setImageDrawable(app.loadIcon(getPackageManager()));
+            icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            row.addView(icon, new LinearLayout.LayoutParams(dp(36), dp(36)));
+            LinearLayout col = new LinearLayout(MainActivity.this);
+            col.setOrientation(1);
+            col.setPadding(dp(12), 0, dp(12), 0);
+            TextView title = new TextView(MainActivity.this);
+            title.setText(app.loadLabel(getPackageManager()).toString());
+            title.setTextSize(16);
+            title.setTextColor(p.getBoolean("paper_theme", false) ? 0xff252525 : Color.WHITE);
+            col.addView(title);
+            TextView sub = new TextView(MainActivity.this);
+            sub.setText(pkg);
+            sub.setTextSize(11);
+            sub.setTextColor(0xff919cab);
+            col.addView(sub);
+            row.addView(col, new LinearLayout.LayoutParams(0, -2, 1));
+            TextView badge = new TextView(MainActivity.this);
+            badge.setText(on ? "已启用 ✓" : "未启用");
+            badge.setTextSize(14);
+            badge.setTextColor(on ? 0xff55d796 : 0xff7f8a99);
+            row.addView(badge);
+            return row;
+          }
+        };
+    list.setAdapter(adapter);
+    Runnable filter =
+        () -> {
+          filtered.clear();
+          String q = search.getText().toString().toLowerCase(java.util.Locale.ROOT);
+          for (ResolveInfo app : apps) {
+            String pkg = app.activityInfo.packageName;
+            if (pkg.equals(getPackageName()) || pkg.equals(ProxyGuard.CLASH)) continue;
+            String label = app.loadLabel(getPackageManager()).toString().toLowerCase(java.util.Locale.ROOT);
+            if (label.contains(q) || pkg.toLowerCase(java.util.Locale.ROOT).contains(q))
+              filtered.add(app);
+          }
+          adapter.notifyDataSetChanged();
+        };
+    search.addTextChangedListener(
+        new android.text.TextWatcher() {
+          public void beforeTextChanged(CharSequence c, int st, int count, int after) {}
+
+          public void onTextChanged(CharSequence c, int st, int beforeCount, int count) {
+            filter.run();
+          }
+
+          public void afterTextChanged(android.text.Editable e) {}
+        });
+    filter.run();
+    list.setOnItemClickListener(
+        (parent, view, pos, id) -> {
+          String pkg = filtered.get(pos).activityInfo.packageName;
+          boolean next = !ProxyGuard.shouldGuard(p, pkg);
+          ProxyGuard.setGuarded(p, pkg, next);
+          adapter.notifyDataSetChanged();
+          draw();
         });
   }
 }

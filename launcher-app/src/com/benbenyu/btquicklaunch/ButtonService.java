@@ -11,14 +11,21 @@ public class ButtonService extends AccessibilityService {
   HidConnectionManager hid;
   static ButtonService instance;
   static long voiceUntil;
+  static String voicePkg = "";
   android.os.Handler handler = new android.os.Handler();
 
   public static void cancelVoice() {
     voiceUntil = 0;
+    voicePkg = "";
     if (instance != null) instance.handler.removeCallbacks(instance.retry);
   }
 
   public static void requestVoice() {
+    requestVoice("com.openai.chatgpt");
+  }
+
+  public static void requestVoice(String pkg) {
+    voicePkg = pkg == null ? "" : pkg;
     voiceUntil = android.os.SystemClock.elapsedRealtime() + 15000;
     if (instance != null) instance.handler.post(instance::voice);
   }
@@ -66,44 +73,111 @@ public class ButtonService extends AccessibilityService {
   }
 
   int visited;
-  void voice() {
-    visited=0;
-    if (android.os.SystemClock.elapsedRealtime() > voiceUntil) return;
-    android.view.accessibility.AccessibilityNodeInfo root = getRootInActiveWindow();
-    try{if (root != null && "com.openai.chatgpt".contentEquals(root.getPackageName())) {
-      if (find(root, true)) {
-        voiceUntil = 0;
-        return;
-      }
-      if (find(root, false)) {
-        cancelVoice();
-        return;
-      }
+  long lastImeDismiss;
+
+  boolean isGeminiTarget() {
+    return "com.google.android.apps.bard".equals(voicePkg);
+  }
+
+  boolean matchesVoiceApp(CharSequence pkg) {
+    if (pkg == null) return false;
+    String p = pkg.toString();
+    if (isGeminiTarget())
+      return p.equals("com.google.android.googlequicksearchbox")
+          || p.equals("com.google.android.apps.bard");
+    return p.equals("com.openai.chatgpt");
+  }
+
+  boolean hasImeWindow() {
+    try {
+      for (android.view.accessibility.AccessibilityWindowInfo w : getWindows())
+        if (w.getType() == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD)
+          return true;
+    } catch (Exception ignored) {
     }
-    }finally{if(root!=null)root.recycle();}
+    return false;
+  }
+
+  void voice() {
+    visited = 0;
+    long now = android.os.SystemClock.elapsedRealtime();
+    if (now > voiceUntil) return;
+    if (isGeminiTarget() && hasImeWindow()) {
+      if (now - lastImeDismiss > 800) {
+        lastImeDismiss = now;
+        AppLog.write("VOICE_DISMISS_IME pkg=" + voicePkg, null);
+        performGlobalAction(GLOBAL_ACTION_BACK);
+      }
+      handler.removeCallbacks(retry);
+      handler.postDelayed(retry, 450);
+      return;
+    }
+    android.view.accessibility.AccessibilityNodeInfo root = getRootInActiveWindow();
+    try {
+      if (root != null && matchesVoiceApp(root.getPackageName())) {
+        if (find(root, true)) {
+          AppLog.write("VOICE_ALREADY_ACTIVE pkg=" + voicePkg, null);
+          cancelVoice();
+          return;
+        }
+        if (find(root, false)) {
+          AppLog.write("VOICE_CLICKED pkg=" + voicePkg, null);
+          cancelVoice();
+          return;
+        }
+      }
+    } finally {
+      if (root != null) root.recycle();
+    }
     handler.removeCallbacks(retry);
     handler.postDelayed(retry, 600);
   }
 
   Runnable retry = () -> voice();
 
+  boolean isActiveDesc(String desc) {
+    if (isGeminiTarget()) {
+      return desc.equals("结束实时对话")
+          || desc.equals("结束")
+          || desc.equals("暂停")
+          || desc.equals("开启摄像头")
+          || desc.equals("打开摄像头")
+          || desc.equalsIgnoreCase("End Live")
+          || desc.equalsIgnoreCase("End")
+          || desc.equalsIgnoreCase("Pause")
+          || desc.equalsIgnoreCase("Turn on camera");
+    }
+    return desc.equals("结束")
+        || desc.equals("关闭麦克风")
+        || desc.equalsIgnoreCase("End")
+        || desc.equalsIgnoreCase("Mute microphone");
+  }
+
+  boolean isVoiceTrigger(android.view.accessibility.AccessibilityNodeInfo node, String desc) {
+    if (isGeminiTarget()) {
+      String id = node.getViewIdResourceName();
+      if ("com.google.android.googlequicksearchbox:id/assistant_robin_input_voice_chat_button_compose"
+          .equals(id)) return true;
+      return desc.equals("打开 Gemini Live")
+          || desc.equals("开启 Gemini Live")
+          || desc.equalsIgnoreCase("Open Gemini Live")
+          || desc.equalsIgnoreCase("Start Gemini Live")
+          || desc.equalsIgnoreCase("Gemini Live");
+    }
+    return desc.equals("语音模式")
+        || desc.equals("启动语音模式")
+        || desc.equals("开始语音对话")
+        || desc.equalsIgnoreCase("Voice mode")
+        || desc.equalsIgnoreCase("Start voice mode")
+        || desc.equals("语音")
+        || desc.equalsIgnoreCase("Start voice conversation");
+  }
+
   boolean find(android.view.accessibility.AccessibilityNodeInfo node, boolean active) {
-    if(++visited>512)return false;
+    if (++visited > 512) return false;
     String desc = String.valueOf(node.getContentDescription());
-    if (active
-        && (desc.equals("结束")
-            || desc.equals("关闭麦克风")
-            || desc.equalsIgnoreCase("End")
-            || desc.equalsIgnoreCase("Mute microphone"))) return true;
-    if (!active
-        && (desc.equals("语音模式")
-            || desc.equals("启动语音模式")
-            || desc.equals("开始语音对话")
-            || desc.equalsIgnoreCase("Voice mode")
-            || desc.equalsIgnoreCase("Start voice mode")
-            || desc.equals("语音")
-            || desc.equalsIgnoreCase("Start voice conversation"))
-        && node.isVisibleToUser()) {
+    if (active && isActiveDesc(desc)) return true;
+    if (!active && isVoiceTrigger(node, desc) && node.isVisibleToUser()) {
       android.view.accessibility.AccessibilityNodeInfo target = node;
       while (target != null) {
         if (target.isClickable() && target.performAction(16)) return true;
@@ -111,19 +185,27 @@ public class ButtonService extends AccessibilityService {
       }
       android.graphics.Rect r = new android.graphics.Rect();
       node.getBoundsInScreen(r);
-      android.graphics.Path path = new android.graphics.Path();
-      path.moveTo(r.centerX(), r.centerY());
-      dispatchGesture(
-          new GestureDescription.Builder()
-              .addStroke(new GestureDescription.StrokeDescription(path, 0, 60))
-              .build(),
-          null,
-          null);
-      return true;
+      if (r.width() > 0 && r.height() > 0) {
+        android.graphics.Path path = new android.graphics.Path();
+        path.moveTo(r.centerX(), r.centerY());
+        dispatchGesture(
+            new GestureDescription.Builder()
+                .addStroke(new GestureDescription.StrokeDescription(path, 0, 60))
+                .build(),
+            null,
+            null);
+        return true;
+      }
     }
     for (int i = 0; i < node.getChildCount(); i++) {
       android.view.accessibility.AccessibilityNodeInfo child = node.getChild(i);
-      if(child!=null){try{if(find(child,active))return true;}finally{child.recycle();}}
+      if (child != null) {
+        try {
+          if (find(child, active)) return true;
+        } finally {
+          child.recycle();
+        }
+      }
     }
     return false;
   }
