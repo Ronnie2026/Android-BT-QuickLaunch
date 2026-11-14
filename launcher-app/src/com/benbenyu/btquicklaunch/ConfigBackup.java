@@ -72,11 +72,11 @@ final class ConfigBackup {
     while (keys.hasNext()) {
       String key = keys.next();
       if (!key.matches(
-          "[0-3](name|pkg|before|delay|voice|icon)|background|wallpaper|brightness|breathing|paper_theme|idle_power|proxy_guard|proxy_on_boot|proxy_apps|disable_ime"))
+          "[0-3](name|pkg|before|delay|voice|icon)|background|wallpaper|brightness|breathing|paper_theme|idle_power|proxy_guard|proxy_on_boot|proxy_apps|disable_ime|bt_connect_sound"))
         continue;
       Object value = j.get(key);
       boolean boolKey =
-          key.endsWith("voice") || key.startsWith("proxy_") || key.equals("breathing") || key.equals("paper_theme") || key.equals("idle_power") || key.equals("disable_ime");
+          key.endsWith("voice") || key.startsWith("proxy_") || key.equals("breathing") || key.equals("paper_theme") || key.equals("idle_power") || key.equals("disable_ime") || key.equals("bt_connect_sound");
       boolean intKey =
           key.endsWith("delay") || key.equals("background") || key.equals("brightness");
       if (boolKey && !(value instanceof Boolean)

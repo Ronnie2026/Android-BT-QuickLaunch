@@ -663,6 +663,13 @@ public class MainActivity extends Activity {
           settingsPanel();
         });
     Switch idle=new Switch(this);idle.setText("2 分钟无活动自动最暗（触摸或 HID 立即恢复）");idle.setTextColor(p.getBoolean("paper_theme",false)?0xff252525:Color.WHITE);idle.setChecked(p.getBoolean("idle_power",true));body.addView(idle);idle.setOnCheckedChangeListener((v,on)->{p.edit().putBoolean("idle_power",on).apply();if(idlePower!=null){idlePower.setDim(false);idlePower.activity("setting");}});
+    Switch btSound = new Switch(this);
+    btSound.setText("蓝牙键盘连接成功提示音");
+    btSound.setTextColor(p.getBoolean("paper_theme", false) ? 0xff252525 : Color.WHITE);
+    btSound.setChecked(p.getBoolean("bt_connect_sound", true));
+    body.addView(btSound);
+    btSound.setOnCheckedChangeListener(
+        (v, on) -> p.edit().putBoolean("bt_connect_sound", on).apply());
     body.addView(text("输入法与语音", 20));
     int fg = p.getBoolean("paper_theme", false) ? 0xff252525 : Color.WHITE;
     LinearLayout imeRow = new LinearLayout(this);
