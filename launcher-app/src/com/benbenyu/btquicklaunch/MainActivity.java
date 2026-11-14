@@ -598,6 +598,34 @@ public class MainActivity extends Activity {
     }
   }
 
+  void openClassicHome() {
+    if (settingsDialog != null && settingsDialog.isShowing()) settingsDialog.dismiss();
+    Intent query = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
+    java.util.List<android.content.pm.ResolveInfo> homes =
+        getPackageManager().queryIntentActivities(query, 0);
+    for (android.content.pm.ResolveInfo info : homes) {
+      String pkg = info.activityInfo.packageName;
+      if (pkg.equals(getPackageName()) || pkg.equals("com.android.settings")) continue;
+      Intent in =
+          new Intent(Intent.ACTION_MAIN)
+              .addCategory(Intent.CATEGORY_HOME)
+              .setClassName(pkg, info.activityInfo.name)
+              .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+      try {
+        startActivity(in);
+        return;
+      } catch (Exception ignored) {
+      }
+    }
+    try {
+      startActivity(
+          new Intent(android.provider.Settings.ACTION_HOME_SETTINGS)
+              .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    } catch (Exception e) {
+      Toast.makeText(this, "未找到系统经典桌面", 1).show();
+    }
+  }
+
   void applyBrightness() {
     android.view.WindowManager.LayoutParams attrs = getWindow().getAttributes();
     int value = p.getInt("brightness", 0);
@@ -656,6 +684,10 @@ public class MainActivity extends Activity {
           }
         });
     body.addView(text("橙线：进程运行中    灰线：检测失败    无横线：未运行", 14));
+    Button classic = new Button(this);
+    classic.setText("进入系统经典桌面（临时操作其他应用）");
+    body.addView(classic);
+    classic.setOnClickListener(v -> openClassicHome());
     Button logs = new Button(this);
     logs.setText("导出今天的运行与崩溃日志");
     body.addView(logs);
