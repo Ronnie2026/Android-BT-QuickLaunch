@@ -142,11 +142,16 @@ public class MainActivity extends Activity {
   void updateBluetooth() {
     if (bluetoothIcon == null) return;
     boolean connected = false;
-    for (int id : android.view.InputDevice.getDeviceIds()) {
-      android.view.InputDevice d = android.view.InputDevice.getDevice(id);
-      if (d != null && d.isExternal() && d.getName().equalsIgnoreCase("COIDEA KM")) {
-        connected = true;
-        break;
+    int hidState = HidConnectionManager.currentState;
+    if (hidState >= 0) {
+      connected = hidState == android.bluetooth.BluetoothProfile.STATE_CONNECTED;
+    } else {
+      for (int id : android.view.InputDevice.getDeviceIds()) {
+        android.view.InputDevice d = android.view.InputDevice.getDevice(id);
+        if (d != null && d.isExternal() && d.getName().equalsIgnoreCase("COIDEA KM")) {
+          connected = true;
+          break;
+        }
       }
     }
     bluetoothIcon.connected = connected;
@@ -167,6 +172,7 @@ public class MainActivity extends Activity {
     }
     inputManager = (android.hardware.input.InputManager) getSystemService(INPUT_SERVICE);
     inputManager.registerInputDeviceListener(deviceListener, new Handler());
+    HidConnectionManager.onStateChanged = () -> runOnUiThread(this::updateBluetooth);
     updateBluetooth();
     getWindow().getDecorView().setSystemUiVisibility(5894);
     applyBrightness();
@@ -183,6 +189,7 @@ public class MainActivity extends Activity {
       batteryRegistered = false;
     }
     if (inputManager != null) inputManager.unregisterInputDeviceListener(deviceListener);
+    HidConnectionManager.onStateChanged = null;
     super.onPause();
   }
 
@@ -336,25 +343,36 @@ public class MainActivity extends Activity {
             } else launch(n);
           });
     }
-    StatusGlyph gear = new StatusGlyph(this, 2);
-    gear.setContentDescription("桌面设置");
-    FrameLayout.LayoutParams gp =
-        new FrameLayout.LayoutParams(dp(48), dp(48), Gravity.TOP | Gravity.RIGHT);
-    gp.rightMargin = dp(8);
-    root.addView(gear, gp);
-    batteryText = new StatusGlyph(this, 3);
-    bluetoothIcon = batteryText;
-    gear.paper = p.getBoolean("paper_theme", false);
-    batteryText.paper = gear.paper;
-    FrameLayout.LayoutParams batteryParams =
-        new FrameLayout.LayoutParams(dp(52), dp(48), Gravity.TOP | Gravity.RIGHT);
-    batteryParams.rightMargin = dp(56);
-    root.addView(batteryText, batteryParams);
+    LinearLayout statusBar = new LinearLayout(this);
+    statusBar.setGravity(Gravity.CENTER_VERTICAL);
+    FrameLayout.LayoutParams statusParams =
+        new FrameLayout.LayoutParams(-2, dp(36), Gravity.TOP | Gravity.RIGHT);
+    statusParams.topMargin = dp(10);
+    statusParams.rightMargin = dp(12);
+    root.addView(statusBar, statusParams);
+
+    boolean paper = p.getBoolean("paper_theme", false);
     networkIndicators = new NetIndicators(this);
-    FrameLayout.LayoutParams netParams =
-        new FrameLayout.LayoutParams(dp(80), dp(48), Gravity.TOP | Gravity.RIGHT);
-    netParams.rightMargin = dp(116);
-    root.addView(networkIndicators, netParams);
+    statusBar.addView(networkIndicators, new LinearLayout.LayoutParams(0, dp(36)));
+
+    batteryText = new StatusGlyph(this, 0);
+    batteryText.paper = paper;
+    LinearLayout.LayoutParams batteryParams = new LinearLayout.LayoutParams(dp(36), dp(36));
+    batteryParams.leftMargin = dp(4);
+    statusBar.addView(batteryText, batteryParams);
+
+    bluetoothIcon = new StatusGlyph(this, 1);
+    bluetoothIcon.paper = paper;
+    LinearLayout.LayoutParams btParams = new LinearLayout.LayoutParams(dp(36), dp(36));
+    btParams.leftMargin = dp(4);
+    statusBar.addView(bluetoothIcon, btParams);
+
+    StatusGlyph gear = new StatusGlyph(this, 2);
+    gear.paper = paper;
+    gear.setContentDescription("桌面设置");
+    LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(dp(36), dp(36));
+    gp.leftMargin = dp(4);
+    statusBar.addView(gear, gp);
     if (desktopVisible) networkIndicators.start();
     Intent battery = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
     if (battery != null) batteryReceiver.onReceive(this, battery);

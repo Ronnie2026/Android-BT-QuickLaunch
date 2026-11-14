@@ -51,7 +51,8 @@ public class NetIndicators extends View {
     try {
       cm.registerNetworkCallback(
           new NetworkRequest.Builder()
-              .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+              .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+              .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
               .build(),
           callback);
     } catch (Exception ignored) {
@@ -100,7 +101,7 @@ public class NetIndicators extends View {
     int count = (wifi ? 1 : 0) + (mobile ? 1 : 0);
     setVisibility(count == 0 ? GONE : VISIBLE);
     if (getLayoutParams() != null) {
-      getLayoutParams().width = (int) (count * 40 * getResources().getDisplayMetrics().density);
+      getLayoutParams().width = (int) (count * 36 * getResources().getDisplayMetrics().density);
       requestLayout();
     }
     setContentDescription((wifi ? "Wi-Fi已连接 " : "") + (mobile ? generation + "移动网络已连接" : ""));
@@ -118,33 +119,30 @@ public class NetIndicators extends View {
     int slot = 0;
     if (wifi) {
       c.save();
-      c.translate(slot++ * 40 + 20, 24);
-      c.scale(1.3f, 1.3f);
-      c.translate(-15, -12);
+      c.translate(slot++ * 36f, 0f);
       p.setStyle(Paint.Style.STROKE);
-      p.setStrokeWidth(2.1f / 1.3f);
+      p.setStrokeWidth(2.0f);
       for (int i = 0; i < 3; i++) {
-        float r = 4 + i * 4;
-        c.drawArc(15 - r, 17 - r, 15 + r, 17 + r, 220, 100, false, p);
+        float r = 5f + i * 4.5f;
+        c.drawArc(18f - r, 24.5f - r, 18f + r, 24.5f + r, 225f, 90f, false, p);
       }
       p.setStyle(Paint.Style.FILL);
-      c.drawCircle(15, 19, 1.5f, p);
+      c.drawCircle(18f, 25f, 1.6f, p);
       c.restore();
     }
     if (mobile) {
       c.save();
-      c.translate(slot++ * 40 + 20, 24);
-      c.scale(1.3f, 1.3f);
-      c.translate(-10, -13);
+      c.translate(slot++ * 36f, 0f);
       p.setStyle(Paint.Style.FILL);
       for (int i = 0; i < 4; i++) {
         p.setAlpha(i < Math.max(1, level) ? 255 : 60);
-        c.drawRoundRect(3 + i * 4, 21 - (i + 1) * 3, 5 + i * 4, 21, 1, 1, p);
+        c.drawRoundRect(7f + i * 4.5f, 26f - (i + 1) * 3.8f, 9.5f + i * 4.5f, 26f, 1f, 1f, p);
       }
       p.setAlpha(255);
-      p.setTextSize(7);
-      c.drawText(generation, 19, 12, p);
+      p.setTextSize(8f);
+      c.drawText(generation, 23f, 16f, p);
       c.restore();
-    }    c.restore();
+    }
+    c.restore();
   }
 }

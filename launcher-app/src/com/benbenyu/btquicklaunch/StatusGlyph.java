@@ -20,88 +20,62 @@ public class StatusGlyph extends View {
     float size = Math.min(getWidth(), getHeight());
     canvas.save();
     canvas.translate((getWidth() - size) / 2, (getHeight() - size) / 2);
-    canvas.scale(size / 48, size / 48);
+    canvas.scale(size / 36f, size / 36f);
     p.setStyle(Paint.Style.STROKE);
-    p.setStrokeWidth(2.2f);
+    p.setStrokeWidth(2.0f);
     p.setStrokeCap(Paint.Cap.ROUND);
     p.setStrokeJoin(Paint.Join.ROUND);
     p.setColor(paper ? 0xff454545 : 0xffb5bdc9);
-    if (type == 3) {
-      p.setStrokeWidth(2.1f);
-      p.setColor(paper ? 0xff454545 : 0xffb5bdc9);
-      canvas.drawRoundRect(1, 17, 29, 31, 3, 3, p);
+    if (type == 0) {
+      int outline =
+          paper ? 0xff454545 : level <= 20 ? 0xfff06b66 : charging ? 0xff63dba1 : 0xffb5bdc9;
+      p.setColor(outline);
+      canvas.drawRoundRect(4f, 10f, 29f, 26f, 2.5f, 2.5f, p);
       p.setStyle(Paint.Style.FILL);
-      canvas.drawRoundRect(31, 21, 33, 27, 1, 1, p);
-      p.setColor(
-          paper ? 0xff454545 : level <= 20 ? 0xfff06b66 : charging ? 0xff63dba1 : 0xffb5bdc9);
-      canvas.drawRoundRect(4, 20, 4 + 22 * Math.max(0, Math.min(level, 100)) / 100f, 28, 1, 1, p);
-      if (charging) {
-        p.setColor(paper ? 0xffe5e2d9 : 0xff101318);
-        Path bolt = new Path();
-        bolt.moveTo(17, 19);
-        bolt.lineTo(12, 25);
-        bolt.lineTo(16, 25);
-        bolt.lineTo(14, 30);
-        bolt.lineTo(20, 23);
-        bolt.lineTo(16, 23);
-        bolt.close();
-        canvas.drawPath(bolt, p);
+      canvas.drawRoundRect(30.5f, 14.5f, 32.5f, 21.5f, 1f, 1f, p);
+      float fillWidth = 20f * Math.max(0, Math.min(level, 100)) / 100f;
+      if (fillWidth > 0.5f) {
+        canvas.drawRoundRect(6.5f, 12.5f, 6.5f + fillWidth, 23.5f, 1.2f, 1.2f, p);
       }
-      p.setStyle(Paint.Style.STROKE);
-      p.setColor(paper ? 0xff454545 : connected ? 0xff63dba1 : 0xfff06b66);
-      Path bt = new Path();
-      bt.moveTo(39, 15);
-      bt.lineTo(46, 20);
-      bt.lineTo(35, 29);
-      bt.moveTo(39, 34);
-      bt.lineTo(46, 29);
-      bt.lineTo(35, 20);
-      bt.moveTo(39, 15);
-      bt.lineTo(39, 34);
-      canvas.drawPath(bt, p);
-    } else if (type == 0) {
-      p.setColor(level <= 20 ? 0xfff06b66 : 0xffb5bdc9);
-      canvas.drawRoundRect(5, 16, 40, 33, 4, 4, p);
-      p.setStyle(Paint.Style.FILL);
-      canvas.drawRoundRect(42, 21, 44, 28, 1, 1, p);
-      p.setColor(charging ? 0xff63dba1 : level <= 20 ? 0xfff06b66 : 0xffb5bdc9);
-      canvas.drawRoundRect(8, 19, 8 + 29 * Math.max(0, Math.min(level, 100)) / 100f, 30, 2, 2, p);
       if (charging) {
-        p.setColor(0xff101318);
         Path bolt = new Path();
-        bolt.moveTo(25, 18);
-        bolt.lineTo(19, 25);
-        bolt.lineTo(24, 25);
-        bolt.lineTo(21, 31);
-        bolt.lineTo(29, 23);
-        bolt.lineTo(24, 23);
+        bolt.moveTo(17.5f, 11.5f);
+        bolt.lineTo(12.5f, 18.5f);
+        bolt.lineTo(16.5f, 18.5f);
+        bolt.lineTo(14.5f, 24.5f);
+        bolt.lineTo(20.5f, 17.5f);
+        bolt.lineTo(16.5f, 17.5f);
         bolt.close();
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(2.2f);
+        p.setColor(paper ? 0xffe5e2d9 : 0xff101318);
+        canvas.drawPath(bolt, p);
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(paper ? 0xff252525 : 0xffffffff);
         canvas.drawPath(bolt, p);
       }
     } else if (type == 1) {
-      p.setColor(connected ? 0xff63dba1 : 0xfff06b66);
+      p.setColor(paper ? (connected ? 0xff252525 : 0xff8a8a8a) : (connected ? 0xff63dba1 : 0xfff06b66));
       Path path = new Path();
-      path.moveTo(23, 9);
-      path.lineTo(32, 17);
-      path.lineTo(16, 32);
-      path.moveTo(23, 39);
-      path.lineTo(32, 31);
-      path.lineTo(16, 16);
-      path.moveTo(23, 9);
-      path.lineTo(23, 39);
+      path.moveTo(18f, 8f);
+      path.lineTo(24f, 13.5f);
+      path.lineTo(12.5f, 22.5f);
+      path.moveTo(18f, 28f);
+      path.lineTo(24f, 22.5f);
+      path.lineTo(12.5f, 13.5f);
+      path.moveTo(18f, 8f);
+      path.lineTo(18f, 28f);
       canvas.drawPath(path, p);
     } else {
-      canvas.scale(.66f, .66f, 24, 24);
-      p.setStrokeWidth(2.1f / .66f);
-      canvas.drawCircle(24, 24, 11, p);
-      canvas.drawCircle(24, 24, 4, p);
+      canvas.drawCircle(18f, 18f, 6.8f, p);
+      canvas.drawCircle(18f, 18f, 2.6f, p);
       for (int i = 0; i < 8; i++) {
         double angle = Math.PI * i / 4;
         canvas.drawLine(
-            24 + (float) Math.cos(angle) * 12,
-            24 + (float) Math.sin(angle) * 12,
-            24 + (float) Math.cos(angle) * 15,
-            24 + (float) Math.sin(angle) * 15,
+            18f + (float) Math.cos(angle) * 7.2f,
+            18f + (float) Math.sin(angle) * 7.2f,
+            18f + (float) Math.cos(angle) * 10f,
+            18f + (float) Math.sin(angle) * 10f,
             p);
       }
     }
