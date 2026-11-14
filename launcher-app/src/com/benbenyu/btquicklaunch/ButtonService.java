@@ -110,9 +110,14 @@ public class ButtonService extends AccessibilityService {
     return "com.google.android.apps.bard".equals(voicePkg);
   }
 
+  boolean isDoubaoTarget() {
+    return "com.larus.nova".equals(voicePkg);
+  }
+
   boolean matchesVoiceApp(CharSequence pkg) {
     if (pkg == null) return false;
     String p = pkg.toString();
+    if (isDoubaoTarget()) return p.equals("com.larus.nova");
     if (isGeminiTarget())
       return p.equals("com.google.android.googlequicksearchbox")
           || p.equals("com.google.android.apps.bard");
@@ -151,6 +156,7 @@ public class ButtonService extends AccessibilityService {
           cancelVoice();
           return;
         }
+        visited = 0;
         if (find(root, false)) {
           AppLog.write("VOICE_CLICKED pkg=" + voicePkg, null);
           cancelVoice();
@@ -167,6 +173,9 @@ public class ButtonService extends AccessibilityService {
   Runnable retry = () -> voice();
 
   boolean isActiveDesc(String desc) {
+    if (isDoubaoTarget())
+      return desc.equals("挂断") || desc.equals("挂断电话") || desc.equals("结束通话")
+          || desc.equalsIgnoreCase("End call");
     if (isGeminiTarget()) {
       return desc.equals("结束实时对话")
           || desc.equals("结束")
@@ -185,6 +194,9 @@ public class ButtonService extends AccessibilityService {
   }
 
   boolean isVoiceTrigger(android.view.accessibility.AccessibilityNodeInfo node, String desc) {
+    if (isDoubaoTarget())
+      return "com.larus.nova:id/real_time_call".equals(node.getViewIdResourceName())
+          || desc.equals("打电话");
     if (isGeminiTarget()) {
       String id = node.getViewIdResourceName();
       if ("com.google.android.googlequicksearchbox:id/assistant_robin_input_voice_chat_button_compose"
@@ -219,13 +231,12 @@ public class ButtonService extends AccessibilityService {
       if (r.width() > 0 && r.height() > 0) {
         android.graphics.Path path = new android.graphics.Path();
         path.moveTo(r.centerX(), r.centerY());
-        dispatchGesture(
+        return dispatchGesture(
             new GestureDescription.Builder()
                 .addStroke(new GestureDescription.StrokeDescription(path, 0, 60))
                 .build(),
             null,
             null);
-        return true;
       }
     }
     for (int i = 0; i < node.getChildCount(); i++) {

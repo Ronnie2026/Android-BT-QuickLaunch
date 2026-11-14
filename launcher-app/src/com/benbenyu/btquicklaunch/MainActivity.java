@@ -11,6 +11,9 @@ import android.widget.*;
 import java.util.*;
 
 public class MainActivity extends Activity {
+  FrameLayout desktopRoot, cleanFeedback;
+  android.media.ToneGenerator cleanTone;
+  final Handler feedbackHandler = new Handler();
   IdlePower idlePower;
   NetIndicators networkIndicators;
   View[] activityDots = new View[4];
@@ -184,6 +187,7 @@ public class MainActivity extends Activity {
   }
 
   protected void onPause() {
+    clearCleanFeedback();
     if(idlePower!=null)idlePower.stop();
     if (networkIndicators != null) networkIndicators.stop();
     desktopVisible = false;
@@ -274,8 +278,10 @@ public class MainActivity extends Activity {
 
   public boolean dispatchTouchEvent(android.view.MotionEvent e){if(e.getActionMasked()==android.view.MotionEvent.ACTION_DOWN&&idlePower!=null)idlePower.activity("touch");return super.dispatchTouchEvent(e);}
   void draw() {
+    clearCleanFeedback();
     if (networkIndicators != null) networkIndicators.stop();
     FrameLayout root = new FrameLayout(this);
+    desktopRoot = root;
     root.setBackgroundColor(Color.BLACK);
     setContentView(root);
     background(root);
@@ -287,7 +293,7 @@ public class MainActivity extends Activity {
       final int n = i;
       FrameLayout cell = new FrameLayout(this);
       row.addView(cell, new LinearLayout.LayoutParams(0, -1, 1));
-      ImageView icon = new ImageView(this);
+      ImageView icon = i < 4 ? new CircularIconView(this) : new ImageView(this);
       icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
       icon.setContentDescription(i == 4 ? "清后台" : get(i, "name", names[i]));
       try {
@@ -324,12 +330,8 @@ public class MainActivity extends Activity {
               if (image != null
                   && image.getIntrinsicWidth() > 0
                   && image.getIntrinsicHeight() > 0) {
-                float scale =
-                    Math.min(
-                        icon.getWidth() / (float) image.getIntrinsicWidth(),
-                        icon.getHeight() / (float) image.getIntrinsicHeight());
-                float bottom =
-                    icon.getTop() + (icon.getHeight() + image.getIntrinsicHeight() * scale) / 2f;
+                float bottom = icon.getTop()
+                    + (icon.getHeight() + Math.min(icon.getWidth(), icon.getHeight())) / 2f;
                 dot.setY(Math.min(cell.getHeight() - dp(8), bottom + dp(10)));
               }
             });
@@ -338,6 +340,7 @@ public class MainActivity extends Activity {
       cell.setOnLongClickListener(
           v -> {
             if (n < 4) reorder(n);
+            else clean();
             return true;
           });
       cell.setOnClickListener(
@@ -562,7 +565,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(0, -1, 1);
         cp.setMargins(dp(5), dp(5), dp(5), dp(5));
         line.addView(card, cp);
-        ImageView icon = new ImageView(this);
+        ImageView icon = new CircularIconView(this);
         icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
         try {
           icon.setImageDrawable(slotIcon(n));
@@ -589,7 +592,7 @@ public class MainActivity extends Activity {
         TextView hint = new TextView(this);
         hint.setText(
             supportsVoice(pkgName) && p.getBoolean(n + "voice", true)
-                ? "VPN 检测 · 自动语音"
+                ? (needsProxy(n, pkgName) ? "VPN 检测 · 自动语音" : "自动进入语音通话")
                 : needsProxy(n, pkgName) ? "VPN 检测 · 点击更换" : "点击更换应用");
         hint.setTextSize(13);
         hint.setTextColor(IosUi.textSecondary(paper));
@@ -794,6 +797,16 @@ public class MainActivity extends Activity {
     body.addView(imeCard);
     body.addView(IosUi.footer(this, "禁用输入法有助于提高按钮模拟点击的成功率，避免输入法弹出遮挡语音按钮。", paper));
 
+    body.addView(IosUi.header(this, "清理后台反馈", paper));
+    LinearLayout cleanCard = IosUi.card(this, paper);
+    cleanCard.addView(IosUi.switchRow(this, "清理后台成功提示音", p.getBoolean("clean_success_sound", true), paper, null,
+        (v, on) -> {
+          p.edit().putBoolean("clean_success_sound", on).apply();
+          if (!on) releaseCleanTone();
+        }));
+    body.addView(cleanCard);
+    body.addView(IosUi.footer(this, "成功后显示派大星和“搞定了”，提示音使用系统短音。关闭提示音仍显示图片；静音／振动模式仅震动。", paper));
+
     body.addView(IosUi.header(this, "语音提醒功能", paper));
     body.addView(IosUi.footer(this, "语音播报需要开启手机响铃模式。静音／振动时仅震动，请先检查手机响铃开关。", paper));
     LinearLayout reminderCard = IosUi.card(this, paper);
@@ -922,12 +935,24 @@ public class MainActivity extends Activity {
                         .setType("application/zip")
                         .addCategory(Intent.CATEGORY_OPENABLE),
                     94)));
+    sysCard.addView(IosUi.divider(this, paper));
+    sysCard.addView(IosUi.disclosureRow(this, "图片来源与许可", "派大星", paper, false,
+        () -> new AlertDialog.Builder(this).setTitle("图片来源与许可")
+            .setMessage("派大星图片：Nickelodeon / NickRewind\n来源：Wikimedia Commons，Patrick Star character.png\n许可：Creative Commons Attribution 3.0 Unported\n原始图片未修改，仅在界面中缩放显示。")
+            .setPositiveButton("查看来源", (d, w) -> openCreditLink("https://commons.wikimedia.org/wiki/File:Patrick_Star_character.png"))
+            .setNeutralButton("查看许可", (d, w) -> openCreditLink("https://creativecommons.org/licenses/by/3.0/"))
+            .setNegativeButton("关闭", null).show()));
     body.addView(sysCard);
 
-    TextView ver = IosUi.footer(this, "BT QuickLaunch 1.3.0 · 双击 1 / 2 / 3 启动 · 三键清理", paper);
+    TextView ver = IosUi.footer(this, "BT QuickLaunch 1.4.0 · 双击 1 / 2 / 3 启动 · 三键清理", paper);
     ver.setGravity(Gravity.CENTER);
     ver.setPadding(0, dp(18), 0, dp(8));
     body.addView(ver);
+  }
+
+  void openCreditLink(String url) {
+    try { startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))); }
+    catch (Exception error) { Toast.makeText(this, "未找到可用浏览器", 0).show(); }
   }
 
   void fillWallpapers(LinearLayout content) {
@@ -1018,7 +1043,8 @@ public class MainActivity extends Activity {
   }
 
   boolean supportsVoice(String pkg) {
-    return "com.openai.chatgpt".equals(pkg) || "com.google.android.apps.bard".equals(pkg);
+    return "com.openai.chatgpt".equals(pkg) || "com.google.android.apps.bard".equals(pkg)
+        || "com.larus.nova".equals(pkg);
   }
 
   void open(String pkg, boolean voice) {
@@ -1192,7 +1218,9 @@ public class MainActivity extends Activity {
     }
     if (supportsVoice(slotPkg)) {
       Switch voice = new Switch(this);
-      voice.setText(gpt ? "自动进入语音通话" : "自动进入 Gemini Live 语音（会先收起键盘）");
+      voice.setText(gpt ? "自动进入语音通话" : "com.larus.nova".equals(slotPkg)
+          ? "打开豆包后自动点击右上角电话，进入通话模式"
+          : "自动进入 Gemini Live 语音（会先收起键盘）");
       voice.setTextColor(Color.WHITE);
       voice.setChecked(p.getBoolean(i + "voice", true));
       settingsContent.addView(voice);
@@ -1438,12 +1466,80 @@ public class MainActivity extends Activity {
   }
 
   void cancelLaunch() {
+    clearCleanFeedback();
     AppLog.write("CANCEL generation=" + launchGeneration, null);
     queuedSlot=-1;
     launchGeneration++;
     h.removeCallbacksAndMessages(null);
     busy = false;
     ButtonService.cancelVoice();
+  }
+
+  void clearCleanFeedback() {
+    FrameLayout old = cleanFeedback;
+    cleanFeedback = null;
+    feedbackHandler.removeCallbacksAndMessages(null);
+    releaseCleanTone();
+    if (old != null) {
+      old.animate().cancel();
+      if (old.getParent() instanceof android.view.ViewGroup)
+        ((android.view.ViewGroup) old.getParent()).removeView(old);
+    }
+  }
+
+  void releaseCleanTone() {
+    if (cleanTone != null) { cleanTone.release(); cleanTone = null; }
+  }
+
+  void playCleanSuccessTone() {
+    if (!p.getBoolean("clean_success_sound", true)) return;
+    if (!ReminderAudio.ringing(this)) { ReminderAudio.vibrate(this); return; }
+    try {
+      cleanTone = new android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 80);
+      cleanTone.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 180);
+      feedbackHandler.postDelayed(this::releaseCleanTone, 500);
+      AppLog.write("CLEAN_SUCCESS_TONE played", null);
+    } catch (RuntimeException error) {
+      releaseCleanTone();
+      AppLog.write("CLEAN_SUCCESS_TONE_FAILED", error);
+    }
+  }
+
+  void showCleanFeedback() {
+    clearCleanFeedback();
+    if (!desktopVisible || desktopRoot == null) return;
+    if (idlePower != null) idlePower.activity("clean_success");
+    final FrameLayout overlay = new FrameLayout(this);
+    cleanFeedback = overlay;
+    overlay.setContentDescription("清理成功，搞定了");
+    final LinearLayout successContent = new LinearLayout(this);
+    successContent.setOrientation(LinearLayout.VERTICAL);
+    successContent.setGravity(Gravity.CENTER);
+    successContent.setPadding(dp(20), dp(16), dp(20), dp(16));
+    ImageView patrick = new ImageView(this);
+    patrick.setScaleType(ImageView.ScaleType.FIT_CENTER);
+    patrick.setContentDescription("派大星");
+    patrick.setImageResource(getResources().getIdentifier("cleanup_patrick", "drawable", getPackageName()));
+    successContent.addView(patrick, new LinearLayout.LayoutParams(-1, 0, 1));
+    final TextView message = new TextView(this);
+    message.setText("搞定了");
+    message.setTextSize(64);
+    message.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+    message.setTextColor(0xffb6f4dc);
+    message.setGravity(Gravity.CENTER);
+    successContent.addView(message, new LinearLayout.LayoutParams(-1, -2));
+    successContent.setVisibility(View.VISIBLE);
+    overlay.addView(successContent, new FrameLayout.LayoutParams(-1, -1));
+    desktopRoot.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
+    overlay.setBackgroundColor(0xff0a1418);
+    playCleanSuccessTone();
+    AppLog.write("CLEAN_FEEDBACK shown", null);
+    feedbackHandler.postDelayed(() -> {
+      if (cleanFeedback != overlay) return;
+      overlay.animate().alpha(0f).setDuration(200).withEndAction(() -> {
+        if (cleanFeedback == overlay) clearCleanFeedback();
+      }).start();
+    }, 3000);
   }
 
   void clean() {
@@ -1471,9 +1567,12 @@ public class MainActivity extends Activity {
                   throw new Exception("清理超时");
                 }
                 int result = process.exitValue();
-                runOnUiThread(
-                    () ->
-                        Toast.makeText(this, result == 0 ? "后台已清理" : "清理失败，请检查 Root 授权", 1).show());
+                AppLog.write("CLEAN_RESULT exit=" + result, null);
+                runOnUiThread(() -> {
+                  if (isDestroyed() || isFinishing()) return;
+                  if (result == 0) showCleanFeedback();
+                  else Toast.makeText(this, "清理失败，请检查 Root 授权", 1).show();
+                });
               } catch (Exception e) {
                 AppLog.write("CLEAN_FAILED",e);runOnUiThread(() -> Toast.makeText(this, "清理失败，请查看日志或 Root 授权", 1).show());
               } finally {
@@ -1534,7 +1633,7 @@ public class MainActivity extends Activity {
             LinearLayout row = new LinearLayout(MainActivity.this);
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(dp(12), dp(8), dp(12), dp(8));
-            ImageView icon = new ImageView(MainActivity.this);
+            ImageView icon = new CircularIconView(MainActivity.this);
             icon.setImageDrawable(app.loadIcon(getPackageManager()));
             icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
             row.addView(icon, new LinearLayout.LayoutParams(dp(36), dp(36)));
@@ -1630,7 +1729,7 @@ public class MainActivity extends Activity {
             LinearLayout row = new LinearLayout(MainActivity.this);
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(dp(12), dp(8), dp(12), dp(8));
-            ImageView icon = new ImageView(MainActivity.this);
+            ImageView icon = new CircularIconView(MainActivity.this);
             icon.setImageDrawable(app.loadIcon(getPackageManager()));
             icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
             row.addView(icon, new LinearLayout.LayoutParams(dp(36), dp(36)));

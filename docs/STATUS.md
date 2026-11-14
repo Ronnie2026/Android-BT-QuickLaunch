@@ -1,6 +1,6 @@
 # Project status
 
-Version 1.3.0, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+Version 1.4.0, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
 
 ## Verified on device
 - Build, signing, install over existing version
@@ -9,6 +9,16 @@ Version 1.3.0, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (
 - Config export / import round trip, invalid file rejected, size limit
 - Crash capture and previous-exit-reason logging
 - Root HID bridge connection accepted by the system
+
+## v1.4.0 validation
+- Doubao phone-button automation passed: the observed resource ID is com.larus.nova:id/real_time_call, and the device log confirmed VOICE_CLICKED for com.larus.nova. Account quota exhaustion is an accepted proof of entry; a completed call is not claimed.
+- VoiceTargetChecks passed Doubao control matching, package isolation, and existing GPT/Gemini trigger checks.
+- Device cleanup returned exit code 0 and displayed the success overlay; physical three-key input also triggered this path.
+- The success overlay now shows Patrick Star and the native Chinese caption 搞定了 with an optional system confirmation tone, enabled by default. Failure keeps the existing error message and never shows success.
+
+- Home and settings app icons now use one circular display mask; Amap was visually checked on device.
+- Cleanup success tone was observed in device logs; the new sound switch passed the configuration backup round-trip.
+- VoiceTargetChecks, DeviceChecks, HidStateChecks and ReminderChecks passed with the final build.
 
 ## v1.3.0 validation
 - APK build and v2/v3 signature verification passed; update installed on the target device.

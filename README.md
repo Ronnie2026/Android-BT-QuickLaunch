@@ -15,8 +15,11 @@ The phone runs this launcher as its default home screen. A paired Bluetooth keyp
 - Fixed landscape home screen with four configurable app slots; long-press to swap slots
 - Bluetooth keypad shortcuts: double-press key 1/2/3 to open the first three slots; press all three keys to clear background apps and return home
 - ChatGPT / Gemini voice launch with local network and VPN/proxy checks; starts Clash Meta and re-checks when needed (no external connectivity probes)
+- Successful background cleanup displays Patrick Star with a large “搞定了” caption and an optional system confirmation tone; triggered by holding/double-tapping X or pressing all three keyboard keys.
+- Doubao automatically clicks its phone control after launch, using accessibility nodes in its portrait interface. Account quota limits still apply.
 - Background app indicator, battery / Wi-Fi / mobile / Bluetooth status icons (including BLE keyboard battery level when reported via GATT)
 - Color and e-paper style themes, custom wallpapers and icons
+- App icons use a uniform circular display mask, including custom icons; original image files stay unchanged.
 - Adaptive launcher icon with a car/Bluetooth mark
 - Idle dimming after 2 minutes to reduce OLED burn-in
 - Fast HID reconnect on disconnect (3 retries, then passive wait during keyboard sleep)
@@ -50,7 +53,7 @@ Output: `dist/BT-QuickLaunch-v<version>.apk`. A local signing key is generated i
 ## Install
 
 ```bash
-adb install -r dist/BT-QuickLaunch-v1.3.0.apk
+adb install -r dist/BT-QuickLaunch-v1.4.0.apk
 adb shell cmd package set-home-activity com.benbenyu.btquicklaunch/.MainActivity
 ```
 
@@ -68,4 +71,4 @@ Then enable the accessibility service, pair the keyboard, and optionally install
 
 ## License
 
-[MIT](LICENSE)
+Source code: [MIT](LICENSE). Third-party artwork: [notices and attribution](THIRD_PARTY_NOTICES.md).

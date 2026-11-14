@@ -14,10 +14,17 @@ public class HomeApplication extends android.app.Application {
             System.exit(10);
           }
         });
-    AppLog.write("APP_START version=1.3.0", null);
+    AppLog.write("APP_START version=1.4.0", null);
     try {
       getPackageManager().getApplicationInfo("com.larus.nova", 0);
       android.content.SharedPreferences slots = getSharedPreferences("home", 0);
+      if (!slots.getBoolean("doubao_voice_v1", false)) {
+        android.content.SharedPreferences.Editor migration = slots.edit();
+        for (int i = 0; i < 4; i++)
+          if ("com.larus.nova".equals(slots.getString(i + "pkg", "")))
+            migration.putBoolean(i + "voice", true);
+        migration.putBoolean("doubao_voice_v1", true).apply();
+      }
       for (int i = 0; i < 4; i++)
         if (slots
             .getString(i + "pkg", i == 3 ? "com.tencent.qqmusic" : "")
@@ -26,7 +33,7 @@ public class HomeApplication extends android.app.Application {
               .edit()
               .putString(i + "pkg", "com.larus.nova")
               .putString(i + "name", "豆包")
-              .putBoolean(i + "voice", false)
+              .putBoolean(i + "voice", true)
               .remove(i + "icon")
               .putString(i + "before", "")
               .apply();
