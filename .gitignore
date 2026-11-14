@@ -1,0 +1,18 @@
+# Build output
+launcher-app/build/
+dist/
+*.apk
+# Signing material - never commit
+.keys/
+*.jks
+*.keystore
+# Local toolchain cache
+.tools/
+# Phone backups and logs
+*.tgz
+*.log
+# OS / IDE
+Thumbs.db
+.DS_Store
+.idea/
+.vscode/

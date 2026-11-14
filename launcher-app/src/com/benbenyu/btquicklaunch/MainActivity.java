@@ -1,0 +1,1250 @@
+package com.benbenyu.btquicklaunch;
+
+import android.app.*;
+import android.content.*;
+import android.content.pm.*;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.os.*;
+import android.view.*;
+import android.widget.*;
+import java.util.*;
+
+public class MainActivity extends Activity {
+  IdlePower idlePower;
+  NetIndicators networkIndicators;
+  View[] activityDots = new View[4];
+  Handler statusHandler = new Handler();
+  boolean desktopVisible = false, statusChecking = false;
+  final Runnable statusTick = () -> refreshProcesses();
+
+  void refreshProcesses() {
+    if (!desktopVisible || statusChecking) return;
+    statusChecking = true;
+    String[] packages = new String[4];
+    for (int i = 0; i < 4; i++) packages[i] = get(i, "pkg", pkgs[i]);
+    new Thread(
+            () -> {
+              Set<String> running = java.util.concurrent.ConcurrentHashMap.newKeySet();
+              boolean valid = false;
+              java.lang.Process proc = null;
+              try {
+                proc =
+                    new ProcessBuilder("su", "-c", "ps -A -o NAME")
+                        .redirectErrorStream(true)
+                        .start();
+                final java.lang.Process child = proc;
+                Thread reader =
+                    new Thread(
+                        () -> {
+                          try {
+                            java.io.BufferedReader r =
+                                new java.io.BufferedReader(
+                                    new java.io.InputStreamReader(child.getInputStream()));
+                            String line;
+                            while ((line = r.readLine()) != null) running.add(line.trim());
+                          } catch (Exception ignored) {
+                          }
+                        });
+                reader.start();
+                if (proc.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) {
+                  reader.join(500);
+                  valid = proc.exitValue() == 0;
+                } else proc.destroy();
+              } catch (Exception ignored) {
+              }
+              final boolean ok = valid;
+              statusHandler.post(
+                  () -> {
+                    statusChecking = false;
+                    if (!desktopVisible) return;
+                    for (int i = 0; i < 4; i++) {
+                      if (!packages[i].equals(get(i, "pkg", pkgs[i]))) continue;
+                      boolean active = false;
+                      if (ok)
+                        for (String name : running)
+                          if (name.equals(packages[i]) || name.startsWith(packages[i] + ":")) {
+                            active = true;
+                            break;
+                          }
+                      if (activityDots[i] != null) {
+                        if (active
+                            && p.getBoolean("breathing", true)
+                            && activityDots[i].getAnimation() == null) {
+                          android.view.animation.AlphaAnimation pulse =
+                              new android.view.animation.AlphaAnimation(0.35f, 0.8f);
+                          pulse.setDuration(2200);
+                          pulse.setRepeatCount(-1);
+                          pulse.setRepeatMode(android.view.animation.Animation.REVERSE);
+                          pulse.setInterpolator(
+                              new android.view.animation.AccelerateDecelerateInterpolator());
+                          activityDots[i].startAnimation(pulse);
+                        } else if (!active || !p.getBoolean("breathing", true)) {
+                          activityDots[i].clearAnimation();
+                        }
+                        if (!ok) {
+                          activityDots[i].clearAnimation();
+                          activityDots[i].setAlpha(0.35f);
+                          activityDots[i].setBackgroundColor(0xff8a939f);
+                          activityDots[i].setVisibility(View.VISIBLE);
+                        } else {
+                          activityDots[i].setAlpha(1f);
+                          activityDots[i].setBackgroundColor(0xffffa340);
+                          activityDots[i].setVisibility(active ? View.VISIBLE : View.INVISIBLE);
+                        }
+                        activityDots[i].setContentDescription(
+                            !ok ? "后台状态检测失败" : active ? "应用后台进程运行中" : "应用未运行");
+                      }
+                    }
+                    statusHandler.postDelayed(statusTick, idlePower!=null&&idlePower.dimmed?30000:5000);
+                  });
+            })
+        .start();
+  }
+
+  String packagesIndex(String[] a, int i) {
+    return a[i];
+  }
+
+  StatusGlyph batteryText;
+  boolean batteryRegistered;
+  final BroadcastReceiver batteryReceiver =
+      new BroadcastReceiver() {
+        public void onReceive(Context c, Intent in) {
+          if (batteryText == null) return;
+          int level = in.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1),
+              scale = in.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100);
+          int percent = level < 0 ? -1 : level * 100 / Math.max(1, scale);
+          boolean charging = in.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0;
+          batteryText.level = Math.max(0, percent);
+          batteryText.charging = charging;
+          batteryText.invalidate();
+          batteryText.setContentDescription("电量 " + percent + "%" + (charging ? "，正在充电" : ""));
+        }
+      };
+  StatusGlyph bluetoothIcon;
+  android.hardware.input.InputManager inputManager;
+  final android.hardware.input.InputManager.InputDeviceListener deviceListener =
+      new android.hardware.input.InputManager.InputDeviceListener() {
+        public void onInputDeviceAdded(int id) {
+          updateBluetooth();
+        }
+
+        public void onInputDeviceRemoved(int id) {
+          updateBluetooth();
+        }
+
+        public void onInputDeviceChanged(int id) {
+          updateBluetooth();
+        }
+      };
+
+  void updateBluetooth() {
+    if (bluetoothIcon == null) return;
+    boolean connected = false;
+    for (int id : android.view.InputDevice.getDeviceIds()) {
+      android.view.InputDevice d = android.view.InputDevice.getDevice(id);
+      if (d != null && d.isExternal() && d.getName().equalsIgnoreCase("COIDEA KM")) {
+        connected = true;
+        break;
+      }
+    }
+    bluetoothIcon.connected = connected;
+    bluetoothIcon.invalidate();
+    bluetoothIcon.setContentDescription(connected ? "蓝牙键盘已连接" : "蓝牙键盘已断开");
+  }
+
+  protected void onResume() {
+    super.onResume();
+    if(idlePower==null)idlePower=new IdlePower(this);idlePower.start();
+    if (networkIndicators != null) networkIndicators.start();
+    desktopVisible = true;
+    statusHandler.removeCallbacks(statusTick);
+    statusHandler.post(statusTick);
+    if (!batteryRegistered) {
+      registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+      batteryRegistered = true;
+    }
+    inputManager = (android.hardware.input.InputManager) getSystemService(INPUT_SERVICE);
+    inputManager.registerInputDeviceListener(deviceListener, new Handler());
+    updateBluetooth();
+    getWindow().getDecorView().setSystemUiVisibility(5894);
+    applyBrightness();
+  }
+
+  protected void onPause() {
+    if(idlePower!=null)idlePower.stop();
+    if (networkIndicators != null) networkIndicators.stop();
+    desktopVisible = false;
+    for (View bar : activityDots) if (bar != null) bar.clearAnimation();
+    statusHandler.removeCallbacks(statusTick);
+    if (batteryRegistered) {
+      unregisterReceiver(batteryReceiver);
+      batteryRegistered = false;
+    }
+    if (inputManager != null) inputManager.unregisterInputDeviceListener(deviceListener);
+    super.onPause();
+  }
+
+  android.content.SharedPreferences p;
+  Handler h = new Handler();
+  final java.util.concurrent.ThreadPoolExecutor networkWorker=new java.util.concurrent.ThreadPoolExecutor(1,1,0L,java.util.concurrent.TimeUnit.MILLISECONDS,new java.util.concurrent.ArrayBlockingQueue<Runnable>(1),new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
+  int launchGeneration = 0;
+  boolean cleaning = false;
+  int queuedSlot = -1;
+  boolean busy = false;
+  long lastCleanTap = 0;
+  String[] names = {"GPT", "DIIPlay", "高德地图", "豆包"},
+      pkgs = {"com.openai.chatgpt", "com.shihab.diplay", "com.autonavi.minimap", "com.larus.nova"};
+
+  String get(int i, String k, String d) {
+    return p.getString(i + k, d);
+  }
+
+  int dp(int x) {
+    return (int) (x * getResources().getDisplayMetrics().density);
+  }
+
+  public void onCreate(Bundle b) {
+    super.onCreate(b);
+    getWindow().setFlags(1024, 1024);
+    getWindow().addFlags(128);
+    setShowWhenLocked(true);
+    getWindow().getDecorView().setSystemUiVisibility(5894);
+    p = getSharedPreferences("home", 0);
+    draw();
+    if (getIntent().hasExtra("button_action")) button(getIntent());
+    else {
+      int boot = android.provider.Settings.Global.getInt(getContentResolver(), "boot_count", -1);
+      if (b == null && p.getInt("auto_boot", -2) != boot) {
+        p.edit().putInt("auto_boot", boot).apply();
+        h.postDelayed(
+            () -> {
+              for (int i = 0; i < 4; i++)
+                if (get(i, "pkg", pkgs[i]).equals("com.openai.chatgpt")) {
+                  launch(i);
+                  break;
+                }
+            },
+            800);
+      }
+    }
+  }
+
+  public void onBackPressed() {}
+
+  protected void onNewIntent(Intent in) {
+    super.onNewIntent(in);
+    setIntent(in);
+    if (in.hasExtra("button_action")) button(in);
+    else cancelLaunch();
+  }
+
+  void button(Intent in) {
+    cancelLaunch();
+    int n = in.getIntExtra("button_action", -1);
+    in.removeExtra("button_action");
+    if (n == 3) clean();
+    else if (n >= 0 && n < 3) launch(n);
+  }
+
+  TextView text(String s, int size) {
+    TextView t = new TextView(this);
+    t.setText(s);
+    t.setTextSize(size);
+    t.setTextColor(p != null && p.getBoolean("paper_theme", false) ? 0xff252525 : Color.WHITE);
+    t.setPadding(dp(12), dp(12), dp(12), dp(12));
+    return t;
+  }
+
+  public boolean dispatchTouchEvent(android.view.MotionEvent e){if(e.getActionMasked()==android.view.MotionEvent.ACTION_DOWN&&idlePower!=null)idlePower.activity("touch");return super.dispatchTouchEvent(e);}
+  void draw() {
+    if (networkIndicators != null) networkIndicators.stop();
+    FrameLayout root = new FrameLayout(this);
+    root.setBackgroundColor(Color.BLACK);
+    setContentView(root);
+    background(root);
+    LinearLayout row = new LinearLayout(this);
+    row.setGravity(Gravity.CENTER);
+    row.setPadding(dp(16), dp(52), dp(16), dp(12));
+    root.addView(row, new FrameLayout.LayoutParams(-1, -1));
+    for (int i = 0; i < 5; i++) {
+      final int n = i;
+      FrameLayout cell = new FrameLayout(this);
+      row.addView(cell, new LinearLayout.LayoutParams(0, -1, 1));
+      ImageView icon = new ImageView(this);
+      icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+      icon.setContentDescription(i == 4 ? "清后台" : get(i, "name", names[i]));
+      try {
+        if (i == 4) throw new Exception();
+        icon.setImageDrawable(slotIcon(i));
+      } catch (Exception e) {
+        icon.setImageResource(
+            i == 4
+                ? android.R.drawable.ic_menu_close_clear_cancel
+                : android.R.drawable.sym_def_app_icon);
+      }
+      if (p.getBoolean("paper_theme", false)) {
+        android.graphics.ColorMatrix mono = new android.graphics.ColorMatrix();
+        mono.setSaturation(0);
+        icon.setColorFilter(new android.graphics.ColorMatrixColorFilter(mono));
+      }
+      FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(-1, -1, Gravity.CENTER);
+      ip.setMargins(dp(18), dp(30), dp(18), dp(30));
+      cell.addView(icon, ip);
+      if (i < 4) {
+        View dot = new View(this);
+        GradientDrawable dotBg = new GradientDrawable();
+        dotBg.setCornerRadius(dp(2));
+        dotBg.setColor(0xffffa340);
+        dot.setBackground(dotBg);
+        dot.setVisibility(View.INVISIBLE);
+        FrameLayout.LayoutParams dotPos =
+            new FrameLayout.LayoutParams(dp(48), dp(3), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        dotPos.bottomMargin = dp(14);
+        cell.addView(dot, dotPos);
+        icon.addOnLayoutChangeListener(
+            (v, l, t, r, b, ol, ot, orr, ob) -> {
+              android.graphics.drawable.Drawable image = icon.getDrawable();
+              if (image != null
+                  && image.getIntrinsicWidth() > 0
+                  && image.getIntrinsicHeight() > 0) {
+                float scale =
+                    Math.min(
+                        icon.getWidth() / (float) image.getIntrinsicWidth(),
+                        icon.getHeight() / (float) image.getIntrinsicHeight());
+                float bottom =
+                    icon.getTop() + (icon.getHeight() + image.getIntrinsicHeight() * scale) / 2f;
+                dot.setY(Math.min(cell.getHeight() - dp(8), bottom + dp(10)));
+              }
+            });
+        activityDots[i] = dot;
+      }
+      cell.setOnLongClickListener(
+          v -> {
+            if (n < 4) reorder(n);
+            return true;
+          });
+      cell.setOnClickListener(
+          v -> {
+            if (n == 4) {
+              long now = android.os.SystemClock.elapsedRealtime();
+              if (lastCleanTap != 0 && now - lastCleanTap < 450) {
+                lastCleanTap = 0;
+                clean();
+              } else lastCleanTap = now;
+            } else launch(n);
+          });
+    }
+    StatusGlyph gear = new StatusGlyph(this, 2);
+    gear.setContentDescription("桌面设置");
+    FrameLayout.LayoutParams gp =
+        new FrameLayout.LayoutParams(dp(48), dp(48), Gravity.TOP | Gravity.RIGHT);
+    gp.rightMargin = dp(8);
+    root.addView(gear, gp);
+    batteryText = new StatusGlyph(this, 3);
+    bluetoothIcon = batteryText;
+    gear.paper = p.getBoolean("paper_theme", false);
+    batteryText.paper = gear.paper;
+    FrameLayout.LayoutParams batteryParams =
+        new FrameLayout.LayoutParams(dp(56), dp(48), Gravity.TOP | Gravity.RIGHT);
+    batteryParams.rightMargin = dp(50);
+    root.addView(batteryText, batteryParams);
+    networkIndicators = new NetIndicators(this);
+    FrameLayout.LayoutParams netParams =
+        new FrameLayout.LayoutParams(dp(60), dp(48), Gravity.TOP | Gravity.RIGHT);
+    netParams.rightMargin = dp(110);
+    root.addView(networkIndicators, netParams);
+    if (desktopVisible) networkIndicators.start();
+    Intent battery = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+    if (battery != null) batteryReceiver.onReceive(this, battery);
+    updateBluetooth();
+    View idleShade=new View(this);idleShade.setBackgroundColor(Color.BLACK);idleShade.setAlpha(0f);idleShade.setClickable(false);root.addView(idleShade,new FrameLayout.LayoutParams(-1,-1));if(idlePower==null)idlePower=new IdlePower(this);idlePower.attach(idleShade);
+    gear.setOnClickListener(v -> settingsPanel());
+    if (p.getBoolean("paper_theme", false)) {
+      android.graphics.ColorMatrix gray = new android.graphics.ColorMatrix();
+      gray.setSaturation(0);
+      android.graphics.Paint filter = new android.graphics.Paint();
+      filter.setColorFilter(new android.graphics.ColorMatrixColorFilter(gray));
+      root.setLayerType(View.LAYER_TYPE_HARDWARE, filter);
+    }
+  }
+
+  int pendingIcon = -1;
+
+  void detailPage(String title) {
+    cancelLaunch();
+    if (settingsDialog == null || !settingsDialog.isShowing()) settingsPanel();
+    settingsContent.removeAllViews();
+    LinearLayout header = new LinearLayout(this);
+    TextView back = text("‹ 返回", 16);
+    back.setOnClickListener(v -> settingsPanel());
+    header.addView(back);
+    header.addView(text(title, 20));
+    settingsContent.addView(header);
+  }
+
+  void option(String name, Runnable action) {
+    TextView item = text(name + "  ›", 17);
+    GradientDrawable bg = new GradientDrawable();
+    bg.setColor(0xff202731);
+    bg.setCornerRadius(dp(12));
+    item.setBackground(bg);
+    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(48));
+    lp.setMargins(0, dp(4), 0, 0);
+    settingsContent.addView(item, lp);
+    item.setOnClickListener(v -> action.run());
+  }
+
+  void iconMenu(int slot) {
+    detailPage("位置 " + (slot + 1) + " · 图标外观");
+    option(
+        "从相册选择图标",
+        () -> {
+          pendingIcon = slot;
+          try {
+            startActivityForResult(
+                new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                    .setType("image/*")
+                    .addCategory(Intent.CATEGORY_OPENABLE)
+                    .addFlags(
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION),
+                92);
+          } catch (Exception e) {
+            Toast.makeText(this, "无法打开相册", 0).show();
+          }
+        });
+    option(
+        "恢复应用默认图标",
+        () -> {
+          p.edit().remove(slot + "icon").apply();
+          draw();
+          settingsPanel();
+        });
+    option("应用启动设置", () -> configure(slot));
+  }
+
+  android.graphics.drawable.Drawable slotIcon(int slot) {
+    String file = p.getString(slot + "icon", "");
+    if (!file.isEmpty()) {
+      android.graphics.drawable.Drawable custom =
+          android.graphics.drawable.Drawable.createFromPath(file);
+      if (custom != null) return custom;
+    }
+    try {
+      return getPackageManager().getApplicationIcon(get(slot, "pkg", pkgs[slot]));
+    } catch (Exception e) {
+      return getResources().getDrawable(android.R.drawable.sym_def_app_icon);
+    }
+  }
+
+  int settingsTab = 0;
+  Dialog settingsDialog;
+  LinearLayout settingsContent;
+
+  void settingsPanel() {
+    cancelLaunch();
+    if (settingsDialog != null && settingsDialog.isShowing()) settingsDialog.dismiss();
+    final Dialog dialog = new Dialog(this){public boolean dispatchTouchEvent(android.view.MotionEvent e){if(e.getActionMasked()==android.view.MotionEvent.ACTION_DOWN&&idlePower!=null)idlePower.activity("settings_touch");return super.dispatchTouchEvent(e);}};
+    settingsDialog = dialog;
+    LinearLayout panel = new LinearLayout(this);
+    panel.setOrientation(1);
+    panel.setPadding(dp(18), dp(10), dp(18), dp(10));
+    panel.setBackgroundColor(0xff101318);
+    LinearLayout tabs = new LinearLayout(this);
+    String[] titles = {"启动 APP 设置", "壁纸设置", "其他设置"};
+    for (int i = 0; i < 3; i++) {
+      final int n = i;
+      TextView tab = text(titles[i], 18);
+      tab.setGravity(Gravity.CENTER);
+      tab.setTextColor(i == settingsTab ? 0xfff1f4f9 : 0xff929bac);
+      GradientDrawable tabBg = new GradientDrawable();
+      tabBg.setColor(i == settingsTab ? 0xff303744 : 0xff171c24);
+      tabBg.setCornerRadius(dp(14));
+      tab.setBackground(tabBg);
+      tabs.addView(tab, new LinearLayout.LayoutParams(0, dp(52), 1));
+      tab.setOnClickListener(
+          v -> {
+            settingsTab = n;
+            for (int j = 0; j < 3; j++) {
+              TextView t = (TextView) tabs.getChildAt(j);
+              t.setTextColor(j == n ? 0xfff1f4f9 : 0xff929bac);
+              GradientDrawable tb = new GradientDrawable();
+              tb.setColor(j == n ? 0xff303744 : 0xff171c24);
+              tb.setCornerRadius(dp(14));
+              t.setBackground(tb);
+            }
+            settingsContent.removeAllViews();
+            if (n == 0) fillApps(settingsContent, dialog);
+            else if (n == 1) fillWallpapers(settingsContent);
+            else fillOther(settingsContent);
+            if (p.getBoolean("paper_theme", false)) {
+              paperStyle(settingsContent);
+              paperStyle(tabs);
+            }
+          });
+    }
+    TextView done = text("完成", 16);
+    done.setOnClickListener(v -> dialog.dismiss());
+    tabs.addView(done);
+    panel.addView(tabs);
+    settingsContent = new LinearLayout(this);
+    settingsContent.setOrientation(1);
+    panel.addView(settingsContent, new LinearLayout.LayoutParams(-1, 0, 1));
+    if (settingsTab == 0) fillApps(settingsContent, dialog);
+    else if (settingsTab == 1) fillWallpapers(settingsContent);
+    else fillOther(settingsContent);
+    dialog.setContentView(panel);
+    dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+    dialog.show();
+    dialog.getWindow().setLayout(-1, -1);
+    dialog.getWindow().getDecorView().setSystemUiVisibility(5894);
+    if (p.getBoolean("paper_theme", false)) paperStyle(panel);
+  }
+
+  void fillApps(LinearLayout grid, Dialog dialog) {
+    for (int row = 0; row < 2; row++) {
+      LinearLayout line = new LinearLayout(this);
+      grid.addView(line, new LinearLayout.LayoutParams(-1, 0, 1));
+      for (int col = 0; col < 2; col++) {
+        final int n = row * 2 + col;
+        LinearLayout card = new LinearLayout(this);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(14), dp(8), dp(14), dp(8));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xff1c222b);
+        bg.setCornerRadius(dp(22));
+        card.setBackground(bg);
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(0, -1, 1);
+        cp.setMargins(dp(4), dp(4), dp(4), dp(4));
+        line.addView(card, cp);
+        ImageView icon = new ImageView(this);
+        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        try {
+          icon.setImageDrawable(slotIcon(n));
+        } catch (Exception ignored) {
+          icon.setImageResource(android.R.drawable.sym_def_app_icon);
+        }
+        card.addView(icon, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        LinearLayout info = new LinearLayout(this);
+        info.setOrientation(1);
+        card.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView label = text("位置 " + (n + 1) + "  ·  " + get(n, "name", names[n]), 17);
+        info.addView(label);
+        TextView hint =
+            text(
+                get(n, "pkg", pkgs[n]).equals("com.openai.chatgpt") ? "智能联网 · 自动语音" : "轻点更换应用", 12);
+        hint.setTextColor(0xff9ba9b9);
+        hint.setPadding(dp(12), 0, 0, 0);
+        info.addView(hint);
+        card.setOnClickListener(
+            v -> {
+              dialog.dismiss();
+              pick(n, false);
+            });
+        TextView more = text("⋯", 24);
+        card.addView(more);
+        more.setContentDescription("位置" + (n + 1) + "高级设置");
+        more.setOnClickListener(
+            v -> {
+              dialog.dismiss();
+              iconMenu(n);
+            });
+      }
+    }
+  }
+
+  void paperStyle(View view) {
+    if (view instanceof TextView) {
+      ((TextView) view).setTextColor(0xff252525);
+      if (view.getBackground() != null) {
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xffd6d3cb);
+        bg.setCornerRadius(dp(12));
+        view.setBackground(bg);
+      }
+    } else if (view instanceof ImageView) {
+      android.graphics.ColorMatrix gray = new android.graphics.ColorMatrix();
+      gray.setSaturation(0);
+      ((ImageView) view).setColorFilter(new android.graphics.ColorMatrixColorFilter(gray));
+    } else if (view.getBackground() != null) {
+      GradientDrawable bg = new GradientDrawable();
+      bg.setColor(0xffe5e2d9);
+      bg.setCornerRadius(dp(18));
+      view.setBackground(bg);
+    }
+    if (view instanceof android.view.ViewGroup) {
+      android.view.ViewGroup group = (android.view.ViewGroup) view;
+      for (int j = 0; j < group.getChildCount(); j++) paperStyle(group.getChildAt(j));
+    }
+  }
+
+  void applyBrightness() {
+    android.view.WindowManager.LayoutParams attrs = getWindow().getAttributes();
+    int value = p.getInt("brightness", 0);
+    attrs.screenBrightness = value == 0 ? -1f : Math.max(.05f, value / 100f);
+    getWindow().setAttributes(attrs);
+  }
+
+  void fillOther(LinearLayout content) {
+    ScrollView scroll = new ScrollView(this);
+    LinearLayout body = new LinearLayout(this);
+    body.setOrientation(1);
+    scroll.addView(body);
+    content.addView(scroll);
+    body.addView(text("色彩主题", 20));
+    Switch theme = new Switch(this);
+    theme.setText("电子书 · 纸白与灰度图标（关闭为原彩色）");
+    theme.setTextColor(Color.WHITE);
+    theme.setChecked(p.getBoolean("paper_theme", false));
+    body.addView(theme);
+    theme.setOnCheckedChangeListener(
+        (v, on) -> {
+          p.edit().putBoolean("paper_theme", on).apply();
+          draw();
+          settingsPanel();
+        });
+    Switch idle=new Switch(this);idle.setText("2 分钟无活动自动最暗（触摸或 HID 立即恢复）");idle.setTextColor(p.getBoolean("paper_theme",false)?0xff252525:Color.WHITE);idle.setChecked(p.getBoolean("idle_power",true));body.addView(idle);idle.setOnCheckedChangeListener((v,on)->{p.edit().putBoolean("idle_power",on).apply();if(idlePower!=null){idlePower.setDim(false);idlePower.activity("setting");}});
+    body.addView(text("显示与状态", 20));
+    Switch breathing = new Switch(this);
+    breathing.setText("后台横线呼吸动画");
+    breathing.setTextColor(Color.WHITE);
+    breathing.setChecked(p.getBoolean("breathing", true));
+    body.addView(breathing);
+    breathing.setOnCheckedChangeListener(
+        (v, on) -> {
+          p.edit().putBoolean("breathing", on).apply();
+          draw();
+        });
+    TextView brightness = text("桌面亮度 · 0 跟随系统", 15);
+    body.addView(brightness);
+    SeekBar slider = new SeekBar(this);
+    slider.setMax(100);
+    slider.setProgress(p.getInt("brightness", 0));
+    body.addView(slider);
+    slider.setOnSeekBarChangeListener(
+        new SeekBar.OnSeekBarChangeListener() {
+          public void onStartTrackingTouch(SeekBar v) {}
+
+          public void onStopTrackingTouch(SeekBar v) {}
+
+          public void onProgressChanged(SeekBar v, int n, boolean user) {
+            if (user) {
+              p.edit().putInt("brightness", n).apply();
+              applyBrightness();
+              brightness.setText(n == 0 ? "桌面亮度 · 跟随系统" : "桌面亮度 · " + n + "%");
+            }
+          }
+        });
+    body.addView(text("橙线：进程运行中    灰线：检测失败    无横线：未运行", 14));
+    Button logs = new Button(this);
+    logs.setText("导出今天的运行与崩溃日志");
+    body.addView(logs);
+    logs.setOnClickListener(
+        v ->
+            startActivityForResult(
+                new Intent(Intent.ACTION_CREATE_DOCUMENT)
+                    .setType("text/plain")
+                    .putExtra(
+                        Intent.EXTRA_TITLE,
+                        new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT)
+                                .format(new java.util.Date())
+                            + ".log")
+                    .addCategory(Intent.CATEGORY_OPENABLE),
+                95));
+    Button backup = new Button(this);
+    backup.setText("导出配置备份");
+    body.addView(backup);
+    backup.setOnClickListener(
+        v ->
+            startActivityForResult(
+                new Intent(Intent.ACTION_CREATE_DOCUMENT)
+                    .setType("application/zip")
+                    .putExtra(Intent.EXTRA_TITLE, "SimpleHome-backup.zip")
+                    .addCategory(Intent.CATEGORY_OPENABLE),
+                93));
+    Button restore = new Button(this);
+    restore.setText("导入配置备份");
+    body.addView(restore);
+    restore.setOnClickListener(
+        v ->
+            startActivityForResult(
+                new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                    .setType("application/zip")
+                    .addCategory(Intent.CATEGORY_OPENABLE),
+                94));
+    body.addView(text("BT QuickLaunch 1.1.0 · 双击 1/2/3 启动 · 三键清理", 14));
+  }
+
+  void fillWallpapers(LinearLayout content) {
+    String[] labels = {"纯黑", "纯白", "暗夜精灵", "午夜星雾", "幽谷微光", "石墨流光", "曜石丝绸", "深海弧影", "烟金暮色", "相册壁纸"};
+    int[][] palettes = {
+      {0xff000000, 0xff000000},
+      {0xffffffff, 0xffffffff},
+      {0xff010604, 0xff102a21, 0xff020705},
+      {0xff03040a, 0xff1a1730, 0xff030710},
+      {0xff010707, 0xff103034, 0xff020508}
+    };
+    ScrollView scroll = new ScrollView(this);
+    LinearLayout gallery = new LinearLayout(this);
+    gallery.setOrientation(1);
+    scroll.addView(gallery);
+    content.addView(scroll, new LinearLayout.LayoutParams(-1, -1));
+    for (int r = 0; r < 4; r++) {
+      LinearLayout row = new LinearLayout(this);
+      gallery.addView(row, new LinearLayout.LayoutParams(-1, dp(150)));
+      for (int c = 0; c < 3; c++) {
+        int index = r * 3 + c;
+        if (index >= labels.length) {
+          row.addView(new View(this), new LinearLayout.LayoutParams(0, -1, 1));
+          continue;
+        }
+        final int n = index;
+        LinearLayout tile = new LinearLayout(this);
+        tile.setOrientation(1);
+        tile.setPadding(dp(6), dp(6), dp(6), dp(6));
+        LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(0, -1, 1);
+        size.setMargins(dp(4), dp(4), dp(4), dp(4));
+        row.addView(tile, size);
+        FrameLayout preview = new FrameLayout(this);
+        if (n < 5)
+          preview.setBackground(
+              new GradientDrawable(GradientDrawable.Orientation.TL_BR, palettes[n]));
+        else if (n < 9) preview.setBackground(new NightWallpaper(n - 5));
+        else {
+          preview.setBackgroundColor(0xff252c35);
+          String path = p.getString("wallpaper", "");
+          if (!path.isEmpty())
+            try {
+              ImageView image = new ImageView(this);
+              image.setImageURI(android.net.Uri.parse(path));
+              image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+              image.setAlpha(0.32f);
+              preview.addView(image, new FrameLayout.LayoutParams(-1, -1));
+            } catch (Exception ignored) {
+            }
+          else {
+            TextView add = text("＋", 28);
+            add.setGravity(Gravity.CENTER);
+            preview.addView(add, new FrameLayout.LayoutParams(-1, -1));
+          }
+        }
+        tile.addView(preview, new LinearLayout.LayoutParams(-1, 0, 1));
+        boolean chosen =
+            p.getString("wallpaper", "").isEmpty() ? p.getInt("background", 0) == n : n == 9;
+        TextView label = text(labels[n] + (chosen ? "  ✓" : ""), 14);
+        label.setGravity(Gravity.CENTER);
+        label.setTextColor(chosen ? 0xff55d796 : 0xffa9b5c4);
+        label.setPadding(0, dp(4), 0, 0);
+        tile.addView(label, new LinearLayout.LayoutParams(-1, dp(28)));
+        tile.setOnClickListener(
+            v -> {
+              if (n == 5) {
+                try {
+                  startActivityForResult(
+                      new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                          .setType("image/*")
+                          .addCategory(Intent.CATEGORY_OPENABLE)
+                          .addFlags(
+                              Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                  | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION),
+                      91);
+                } catch (Exception e) {
+                  Toast.makeText(this, "无法打开相册", 0).show();
+                }
+              } else {
+                p.edit().putInt("background", n).remove("wallpaper").apply();
+                draw();
+                settingsContent.removeAllViews();
+                fillWallpapers(settingsContent);
+              }
+            });
+      }
+    }
+  }
+
+  void open(String pkg, boolean voice) {
+    if (voice && pkg.equals("com.openai.chatgpt")) ButtonService.requestVoice();
+    try {
+      Intent in =
+          voice
+              ? new Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://chatgpt.com/voice"))
+                  .setPackage(pkg)
+              : getPackageManager().getLaunchIntentForPackage(pkg);
+      if (in == null) throw new Exception();
+      startActivity(in.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    } catch (Exception e) {
+      Toast.makeText(this, "无法打开应用，请在右上角设置中重新选择", 1).show();
+    }
+  }
+
+  void launch(int i) {
+    if (cleaning) {
+      queuedSlot = i;
+      return;
+    }
+    AppLog.write("LAUNCH slot=" + i + " package=" + get(i, "pkg", pkgs[i]), null);
+    cancelLaunch();
+    busy = true;
+    final int generation = launchGeneration;
+    final String pkg = get(i, "pkg", pkgs[i]);
+    if (pkg.equals("com.openai.chatgpt")) {
+      checkGpt(i, generation, false, 0);
+      return;
+    }
+    String before = get(i, "before", "");
+    if (!before.isEmpty()) open(before, false);
+    h.postDelayed(
+        () -> {
+          if (generation != launchGeneration) return;
+          busy = false;
+          open(pkg, false);
+        },
+        before.isEmpty() ? 0 : p.getInt(i + "delay", 3000));
+  }
+
+  void checkGpt(int i, int generation, boolean proxy, int attempt) {
+    networkWorker.execute(
+            () -> {
+              boolean online = NetworkCheck.reachable();
+              h.post(
+                  () -> {
+                    if (generation != launchGeneration || isDestroyed()) return;
+                    if (online) {
+                      busy = false;
+                      open(get(i, "pkg", pkgs[i]), p.getBoolean(i + "voice", true));
+                      return;
+                    }
+                    if (!proxy) {
+                      try {
+                        AppLog.write("PROXY_START", null);
+                        startActivity(
+                            new Intent("com.github.metacubex.clash.meta.action.START_CLASH"));
+                      } catch (Exception e) {
+                        open("com.github.metacubex.clash.meta", false);
+                      }
+                      h.postDelayed(
+                          () -> {
+                            if (generation == launchGeneration) checkGpt(i, generation, true, 1);
+                          },
+                          1500);
+                    } else if (attempt < 3) {
+                      h.postDelayed(
+                          () -> {
+                            if (generation == launchGeneration)
+                              checkGpt(i, generation, true, attempt + 1);
+                          },
+                          1500);
+                    } else {
+                      AppLog.write("GPT_NETWORK_FAILED after_proxy", null);
+                      busy = false;
+                      Toast.makeText(this, "代理已启动，但外网仍不可达，请检查 Clash 配置后重试", 1).show();
+                    }
+                  });
+            });
+  }
+
+  protected void onDestroy() {
+    cancelLaunch();
+    networkWorker.shutdownNow();
+    statusHandler.removeCallbacksAndMessages(null);
+    super.onDestroy();
+  }
+
+  void configure(int i) {
+    detailPage("位置 " + (i + 1) + " · 启动设置");
+    option("更换目标应用", () -> pick(i, false));
+    boolean gpt = get(i, "pkg", pkgs[i]).equals("com.openai.chatgpt");
+    if (gpt) {
+      settingsContent.addView(text("GPT 特殊规则：先检查外网，不通则启动 Clash 并复检；复检失败不会强行进入通话。", 14));
+      Switch voice = new Switch(this);
+      voice.setText("自动进入语音通话");
+      voice.setTextColor(Color.WHITE);
+      voice.setChecked(p.getBoolean(i + "voice", true));
+      settingsContent.addView(voice);
+      voice.setOnCheckedChangeListener((v, on) -> p.edit().putBoolean(i + "voice", on).apply());
+    } else {
+      option("设置前置应用", () -> pick(i, true));
+      option(
+          "取消前置应用",
+          () -> {
+            p.edit().putString(i + "before", "").apply();
+            Toast.makeText(this, "前置应用已取消", 0).show();
+          });
+      TextView delay = text("前置等待时间：" + (p.getInt(i + "delay", 3000) / 1000) + " 秒", 15);
+      settingsContent.addView(delay);
+      SeekBar bar = new SeekBar(this);
+      bar.setMax(9);
+      bar.setProgress(Math.max(0, Math.min(9, p.getInt(i + "delay", 3000) / 1000 - 1)));
+      settingsContent.addView(bar);
+      bar.setOnSeekBarChangeListener(
+          new SeekBar.OnSeekBarChangeListener() {
+            public void onStartTrackingTouch(SeekBar b) {}
+
+            public void onStopTrackingTouch(SeekBar b) {}
+
+            public void onProgressChanged(SeekBar b, int v, boolean user) {
+              if (user) {
+                p.edit().putInt(i + "delay", (v + 1) * 1000).apply();
+                delay.setText("前置等待时间：" + (v + 1) + " 秒");
+              }
+            }
+          });
+    }
+  }
+
+  void reorder(int from) {
+    detailPage("交换应用位置");
+    for (int j = 0; j < 4; j++) {
+      final int to = j;
+      option(
+          "位置 " + (j + 1) + " · " + get(j, "name", names[j]),
+          () -> {
+            if (to == from) return;
+            String aIcon = p.getString(from + "icon", ""), bIcon = p.getString(to + "icon", "");
+            String aName = get(from, "name", names[from]), bName = get(to, "name", names[to]);
+            String aPkg = get(from, "pkg", pkgs[from]), bPkg = get(to, "pkg", pkgs[to]);
+            String
+                aBefore = get(from, "before", from == 0 ? "com.github.metacubex.clash.meta" : ""),
+                bBefore = get(to, "before", to == 0 ? "com.github.metacubex.clash.meta" : "");
+            boolean av = p.getBoolean(from + "voice", from == 0),
+                bv = p.getBoolean(to + "voice", to == 0);
+            int ad = p.getInt(from + "delay", 3000), bd = p.getInt(to + "delay", 3000);
+            p.edit()
+                .putString(from + "icon", bIcon)
+                .putString(to + "icon", aIcon)
+                .putString(from + "name", bName)
+                .putString(to + "name", aName)
+                .putString(from + "pkg", bPkg)
+                .putString(to + "pkg", aPkg)
+                .putString(from + "before", bBefore)
+                .putString(to + "before", aBefore)
+                .putBoolean(from + "voice", bv)
+                .putBoolean(to + "voice", av)
+                .putInt(from + "delay", bd)
+                .putInt(to + "delay", ad)
+                .apply();
+            draw();
+            settingsPanel();
+          });
+    }
+  }
+
+  void wallpapers() {
+    new AlertDialog.Builder(this)
+        .setTitle("背景与壁纸")
+        .setItems(
+            new String[] {"纯黑（默认）", "纯白", "暗夜精灵 · 墨绿", "午夜星雾 · 蓝紫", "幽谷微光 · 青黑", "从相册选择"},
+            (d, w) -> {
+              if (w == 5) {
+                try {
+                  startActivityForResult(
+                      new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                          .setType("image/*")
+                          .addCategory(Intent.CATEGORY_OPENABLE)
+                          .addFlags(
+                              Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                  | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION),
+                      91);
+                } catch (Exception e) {
+                  Toast.makeText(this, "没有可用的相册或文件选择器", 1).show();
+                }
+              } else {
+                p.edit().putInt("background", w).remove("wallpaper").apply();
+                draw();
+              }
+            })
+        .show();
+  }
+
+  void background(FrameLayout root) {
+    if (p.getBoolean("paper_theme", false)) {
+      root.setBackgroundColor(0xffe5e2d9);
+      return;
+    }
+    int b = p.getInt("background", 0);
+    root.setBackgroundColor(b == 1 ? Color.WHITE : Color.BLACK);
+    String uri = p.getString("wallpaper", "");
+    if (!uri.isEmpty()) {
+      try {
+        android.graphics.BitmapFactory.Options o = new android.graphics.BitmapFactory.Options();
+        o.inJustDecodeBounds = true;
+        java.io.InputStream in = getContentResolver().openInputStream(android.net.Uri.parse(uri));
+        android.graphics.BitmapFactory.decodeStream(in, null, o);
+        in.close();
+        o.inSampleSize = 1;
+        while (o.outWidth / o.inSampleSize > 2400 || o.outHeight / o.inSampleSize > 2400)
+          o.inSampleSize *= 2;
+        o.inJustDecodeBounds = false;
+        in = getContentResolver().openInputStream(android.net.Uri.parse(uri));
+        android.graphics.Bitmap bm = android.graphics.BitmapFactory.decodeStream(in, null, o);
+        in.close();
+        if (bm == null) throw new Exception();
+        ImageView wall = new ImageView(this);
+        wall.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        wall.setImageBitmap(bm);
+        wall.setAlpha(0.32f);
+        root.addView(wall, new FrameLayout.LayoutParams(-1, -1));
+      } catch (Exception e) {
+        p.edit().remove("wallpaper").apply();
+        Toast.makeText(this, "壁纸不可用，已恢复背景", 0).show();
+      }
+    } else if (b >= 5) {
+      root.setBackground(new NightWallpaper(b - 5));
+    } else if (b >= 2) {
+      int[][] colors = {
+        {0xff010604, 0xff102a21, 0xff020705},
+        {0xff03040a, 0xff1a1730, 0xff030710},
+        {0xff010707, 0xff103034, 0xff020508}
+      };
+      root.setBackground(
+          new GradientDrawable(GradientDrawable.Orientation.TL_BR, colors[Math.min(b - 2, 2)]));
+    }
+  }
+
+  protected void onActivityResult(int r, int c, Intent data) {
+    super.onActivityResult(r, c, data);
+    if (r == 95 && c == RESULT_OK && data != null && data.getData() != null) {
+      new Thread(
+              () -> {
+                try {
+                  java.io.File file =
+                      new java.io.File(
+                          getFilesDir(),
+                          "logs/"
+                              + new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT)
+                                  .format(new java.util.Date())
+                              + ".log");
+                  try (java.io.InputStream in = new java.io.FileInputStream(file);
+                      java.io.OutputStream out =
+                          getContentResolver().openOutputStream(data.getData())) {
+                    byte[] buffer = new byte[8192];
+                    int n;
+                    while ((n = in.read(buffer)) != -1) out.write(buffer, 0, n);
+                  }
+                  runOnUiThread(() -> Toast.makeText(this, "日志已导出", 0).show());
+                } catch (Exception ex) {
+                  runOnUiThread(() -> Toast.makeText(this, "日志导出失败", 1).show());
+                }
+              })
+          .start();
+      return;
+    }
+    if ((r == 93 || r == 94) && c == RESULT_OK && data != null && data.getData() != null) {
+      cancelLaunch();
+      new Thread(
+              () -> {
+                try {
+                  if (r == 93) ConfigBackup.write(this, p, data.getData());
+                  else ConfigBackup.restore(this, p, data.getData());
+                  runOnUiThread(
+                      () -> {
+                        draw();
+                        settingsPanel();
+                        Toast.makeText(this, r == 93 ? "备份已导出" : "配置已恢复", 0).show();
+                      });
+                } catch (Exception ex) {
+                  runOnUiThread(() -> Toast.makeText(this, "备份操作失败：" + ex.getMessage(), 1).show());
+                }
+              })
+          .start();
+      return;
+    }
+    if (r == 92 && c == RESULT_OK && data != null && data.getData() != null && pendingIcon >= 0) {
+      try {
+        int slot = pendingIcon;
+        java.io.InputStream in = getContentResolver().openInputStream(data.getData());
+        android.graphics.BitmapFactory.Options options =
+            new android.graphics.BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+        android.graphics.BitmapFactory.decodeStream(in, null, options);
+        in.close();
+        options.inSampleSize = 1;
+        while (options.outWidth / options.inSampleSize > 512
+            || options.outHeight / options.inSampleSize > 512) options.inSampleSize *= 2;
+        options.inJustDecodeBounds = false;
+        in = getContentResolver().openInputStream(data.getData());
+        android.graphics.Bitmap bitmap =
+            android.graphics.BitmapFactory.decodeStream(in, null, options);
+        in.close();
+        if (bitmap == null) throw new Exception();
+        java.io.File out =
+            new java.io.File(getFilesDir(), "icon-" + java.util.UUID.randomUUID() + ".png");
+        java.io.FileOutputStream stream = new java.io.FileOutputStream(out);
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream);
+        stream.close();
+        p.edit().putString(slot + "icon", out.getAbsolutePath()).apply();
+        draw();
+        settingsPanel();
+      } catch (Exception ex) {
+        Toast.makeText(this, "无法读取图标图片", 1).show();
+      }
+      pendingIcon = -1;
+      return;
+    }
+    if (r == 91 && c == RESULT_OK && data != null && data.getData() != null) {
+      try {
+        getContentResolver()
+            .takePersistableUriPermission(data.getData(), Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        p.edit().putString("wallpaper", data.getData().toString()).putInt("background", 0).apply();
+        draw();
+        if (settingsDialog != null && settingsDialog.isShowing()) {
+          settingsContent.removeAllViews();
+          fillWallpapers(settingsContent);
+        }
+      } catch (Exception e) {
+        Toast.makeText(this, "无法读取这张图片，请重新选择", 1).show();
+      }
+    }
+  }
+
+  void cancelLaunch() {
+    AppLog.write("CANCEL generation=" + launchGeneration, null);
+    queuedSlot=-1;
+    launchGeneration++;
+    h.removeCallbacksAndMessages(null);
+    busy = false;
+    ButtonService.cancelVoice();
+  }
+
+  void clean() {
+    if (cleaning) return;
+    cleaning = true;
+    queuedSlot = -1;
+    AppLog.write("CLEAN_REQUEST", null);
+    cancelLaunch();
+    new Thread(
+            () -> {
+              try {
+                Set<String> targets = new HashSet<>(Arrays.asList(pkgs));
+                targets.add("mark.via");
+                for (int i = 0; i < 4; i++) targets.add(get(i, "pkg", pkgs[i]));
+                StringBuilder cmd = new StringBuilder("result=0; ");
+                for (String pkg : targets)
+                  if (pkg.matches("[a-zA-Z0-9_.]+")
+                      && !Arrays.asList(
+                              "com.benbenyu.btquicklaunch",
+                              "com.github.metacubex.clash.meta",
+                              "io.github.sds100.keymapper",
+                              "com.arlosoft.macrodroid",
+                              "dev.ukanth.ufirewall")
+                          .contains(pkg)) cmd.append("am force-stop ").append(pkg).append(" || result=1; ");
+                java.lang.Process process = new ProcessBuilder("su", "-c", cmd.append("exit $result").toString()).start();
+                if (!process.waitFor(8, java.util.concurrent.TimeUnit.SECONDS)) {
+                  process.destroy();
+                  throw new Exception("清理超时");
+                }
+                int result = process.exitValue();
+                runOnUiThread(
+                    () ->
+                        Toast.makeText(this, result == 0 ? "后台已清理" : "清理失败，请检查 Root 授权", 1).show());
+              } catch (Exception e) {
+                AppLog.write("CLEAN_FAILED",e);runOnUiThread(() -> Toast.makeText(this, "清理失败，请查看日志或 Root 授权", 1).show());
+              } finally {
+                runOnUiThread(
+                    () -> {
+                      cleaning = false;
+                      int next = queuedSlot;
+                      queuedSlot = -1;
+                      if (next >= 0) launch(next);
+                    });
+              }
+            })
+        .start();
+  }
+
+  void pick(int i, boolean before) {
+    cancelLaunch();
+    settingsTab = 0;
+    if (settingsDialog == null || !settingsDialog.isShowing()) settingsPanel();
+    settingsContent.removeAllViews();
+    TextView title = text(before ? "选择前置应用" : "位置 " + (i + 1) + " · 选择应用", 20);
+    settingsContent.addView(title);
+    EditText search = new EditText(this);
+    search.setSingleLine();
+    search.setTextColor(Color.WHITE);
+    search.setHintTextColor(0xff919cab);
+    search.setHint("搜索应用");
+    settingsContent.addView(search);
+    List<ResolveInfo> apps =
+        getPackageManager()
+            .queryIntentActivities(
+                new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0);
+    Collections.sort(
+        apps,
+        (x, y) ->
+            x.loadLabel(getPackageManager())
+                .toString()
+                .compareToIgnoreCase(y.loadLabel(getPackageManager()).toString()));
+    ListView list = new ListView(this);
+    settingsContent.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
+    ArrayList<ResolveInfo> filtered = new ArrayList<>();
+    BaseAdapter adapter =
+        new BaseAdapter() {
+          public int getCount() {
+            return filtered.size();
+          }
+
+          public Object getItem(int pos) {
+            return filtered.get(pos);
+          }
+
+          public long getItemId(int pos) {
+            return pos;
+          }
+
+          public View getView(int pos, View reuse, android.view.ViewGroup parent) {
+            ResolveInfo app = filtered.get(pos);
+            LinearLayout row = new LinearLayout(MainActivity.this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(12), dp(8), dp(12), dp(8));
+            ImageView icon = new ImageView(MainActivity.this);
+            icon.setImageDrawable(app.loadIcon(getPackageManager()));
+            icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            row.addView(icon, new LinearLayout.LayoutParams(dp(36), dp(36)));
+            row.addView(text(app.loadLabel(getPackageManager()).toString(), 16));
+            return row;
+          }
+        };
+    list.setAdapter(adapter);
+    Runnable filter =
+        () -> {
+          filtered.clear();
+          String q = search.getText().toString().toLowerCase(java.util.Locale.ROOT);
+          for (ResolveInfo app : apps)
+            if (!app.activityInfo.packageName.equals(getPackageName())
+                && app.loadLabel(getPackageManager())
+                    .toString()
+                    .toLowerCase(java.util.Locale.ROOT)
+                    .contains(q)) filtered.add(app);
+          adapter.notifyDataSetChanged();
+        };
+    search.addTextChangedListener(
+        new android.text.TextWatcher() {
+          public void beforeTextChanged(CharSequence c, int st, int count, int after) {}
+
+          public void onTextChanged(CharSequence c, int st, int beforeCount, int count) {
+            filter.run();
+          }
+
+          public void afterTextChanged(android.text.Editable e) {}
+        });
+    filter.run();
+    list.setOnItemClickListener(
+        (parent, view, pos, id) -> {
+          ResolveInfo app = filtered.get(pos);
+          p.edit().putString(i + (before ? "before" : "pkg"), app.activityInfo.packageName).apply();
+          if (!before)
+            p.edit()
+                .remove(i + "icon")
+                .putString(i + "name", app.loadLabel(getPackageManager()).toString())
+                .putBoolean(i + "voice", app.activityInfo.packageName.equals("com.openai.chatgpt"))
+                .apply();
+          ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
+              .hideSoftInputFromWindow(search.getWindowToken(), 0);
+          draw();
+          settingsPanel();
+        });
+  }
+}
