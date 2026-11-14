@@ -27,8 +27,7 @@ public class StatusGlyph extends View {
     p.setStrokeJoin(Paint.Join.ROUND);
     p.setColor(paper ? 0xff454545 : 0xffb5bdc9);
     if (type == 3) {
-      canvas.scale(.72f, .72f, 24, 24);
-      p.setStrokeWidth(1.8f);
+      p.setStrokeWidth(2.1f);
       p.setColor(paper ? 0xff454545 : 0xffb5bdc9);
       canvas.drawRoundRect(1, 17, 29, 31, 3, 3, p);
       p.setStyle(Paint.Style.FILL);
@@ -92,7 +91,8 @@ public class StatusGlyph extends View {
       path.lineTo(23, 39);
       canvas.drawPath(path, p);
     } else {
-      canvas.scale(.62f, .62f, 24, 24);
+      canvas.scale(.66f, .66f, 24, 24);
+      p.setStrokeWidth(2.1f / .66f);
       canvas.drawCircle(24, 24, 11, p);
       canvas.drawCircle(24, 24, 4, p);
       for (int i = 0; i < 8; i++) {

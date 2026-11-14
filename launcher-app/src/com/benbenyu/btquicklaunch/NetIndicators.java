@@ -100,7 +100,7 @@ public class NetIndicators extends View {
     int count = (wifi ? 1 : 0) + (mobile ? 1 : 0);
     setVisibility(count == 0 ? GONE : VISIBLE);
     if (getLayoutParams() != null) {
-      getLayoutParams().width = (int) (count * 30 * getResources().getDisplayMetrics().density);
+      getLayoutParams().width = (int) (count * 40 * getResources().getDisplayMetrics().density);
       requestLayout();
     }
     setContentDescription((wifi ? "Wi-Fi已连接 " : "") + (mobile ? generation + "移动网络已连接" : ""));
@@ -112,22 +112,30 @@ public class NetIndicators extends View {
     float unit = getResources().getDisplayMetrics().density;
     c.save();
     c.scale(unit, unit);
-    c.translate(0, 10);
     boolean paper = getContext().getSharedPreferences("home", 0).getBoolean("paper_theme", false);
-    p.setColor(paper ? 0xff454545 : 0xffaab5c5);
-    p.setStrokeWidth(1.6f);
+    p.setColor(paper ? 0xff454545 : 0xffb5bdc9);
     p.setStrokeCap(Paint.Cap.ROUND);
-    p.setStyle(Paint.Style.STROKE);
+    int slot = 0;
     if (wifi) {
+      c.save();
+      c.translate(slot++ * 40 + 20, 24);
+      c.scale(1.3f, 1.3f);
+      c.translate(-15, -12);
+      p.setStyle(Paint.Style.STROKE);
+      p.setStrokeWidth(2.1f / 1.3f);
       for (int i = 0; i < 3; i++) {
         float r = 4 + i * 4;
         c.drawArc(15 - r, 17 - r, 15 + r, 17 + r, 220, 100, false, p);
       }
       p.setStyle(Paint.Style.FILL);
-      c.drawCircle(15, 19, 1.3f, p);
-      c.translate(30, 0);
+      c.drawCircle(15, 19, 1.5f, p);
+      c.restore();
     }
     if (mobile) {
+      c.save();
+      c.translate(slot++ * 40 + 20, 24);
+      c.scale(1.3f, 1.3f);
+      c.translate(-10, -13);
       p.setStyle(Paint.Style.FILL);
       for (int i = 0; i < 4; i++) {
         p.setAlpha(i < Math.max(1, level) ? 255 : 60);
@@ -136,7 +144,7 @@ public class NetIndicators extends View {
       p.setAlpha(255);
       p.setTextSize(7);
       c.drawText(generation, 19, 12, p);
-    }
-    c.restore();
+      c.restore();
+    }    c.restore();
   }
 }

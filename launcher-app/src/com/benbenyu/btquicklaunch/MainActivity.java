@@ -347,13 +347,13 @@ public class MainActivity extends Activity {
     gear.paper = p.getBoolean("paper_theme", false);
     batteryText.paper = gear.paper;
     FrameLayout.LayoutParams batteryParams =
-        new FrameLayout.LayoutParams(dp(56), dp(48), Gravity.TOP | Gravity.RIGHT);
-    batteryParams.rightMargin = dp(50);
+        new FrameLayout.LayoutParams(dp(52), dp(48), Gravity.TOP | Gravity.RIGHT);
+    batteryParams.rightMargin = dp(56);
     root.addView(batteryText, batteryParams);
     networkIndicators = new NetIndicators(this);
     FrameLayout.LayoutParams netParams =
-        new FrameLayout.LayoutParams(dp(60), dp(48), Gravity.TOP | Gravity.RIGHT);
-    netParams.rightMargin = dp(110);
+        new FrameLayout.LayoutParams(dp(80), dp(48), Gravity.TOP | Gravity.RIGHT);
+    netParams.rightMargin = dp(116);
     root.addView(networkIndicators, netParams);
     if (desktopVisible) networkIndicators.start();
     Intent battery = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
