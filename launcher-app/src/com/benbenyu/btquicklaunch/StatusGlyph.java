@@ -55,17 +55,36 @@ public class StatusGlyph extends View {
         canvas.drawPath(bolt, p);
       }
     } else if (type == 1) {
-      p.setColor(paper ? (connected ? 0xff252525 : 0xff8a8a8a) : (connected ? 0xff63dba1 : 0xfff06b66));
+      int btColor =
+          paper
+              ? (connected ? 0xff252525 : 0xff8a8a8a)
+              : (connected ? 0xff63dba1 : 0xfff06b66);
+      p.setColor(btColor);
+      boolean showBat = connected && level >= 0 && level <= 100;
+      float bx = showBat ? 11.5f : 18f;
       Path path = new Path();
-      path.moveTo(18f, 8f);
-      path.lineTo(24f, 13.5f);
-      path.lineTo(12.5f, 22.5f);
-      path.moveTo(18f, 28f);
-      path.lineTo(24f, 22.5f);
-      path.lineTo(12.5f, 13.5f);
-      path.moveTo(18f, 8f);
-      path.lineTo(18f, 28f);
+      path.moveTo(bx, 8f);
+      path.lineTo(bx + 6f, 13.5f);
+      path.lineTo(bx - 5.5f, 22.5f);
+      path.moveTo(bx, 28f);
+      path.lineTo(bx + 6f, 22.5f);
+      path.lineTo(bx - 5.5f, 13.5f);
+      path.moveTo(bx, 8f);
+      path.lineTo(bx, 28f);
       canvas.drawPath(path, p);
+      if (showBat) {
+        int batColor = paper ? 0xff454545 : level <= 20 ? 0xfff06b66 : 0xff63dba1;
+        p.setColor(batColor);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(1.6f);
+        canvas.drawRoundRect(22f, 11f, 30f, 26.5f, 1.5f, 1.5f, p);
+        p.setStyle(Paint.Style.FILL);
+        canvas.drawRoundRect(24.2f, 9f, 27.8f, 10.6f, 0.8f, 0.8f, p);
+        float fillH = 11.5f * Math.max(0, Math.min(level, 100)) / 100f;
+        if (fillH > 0.4f) {
+          canvas.drawRoundRect(23.7f, 24.5f - fillH, 28.3f, 24.5f, 0.8f, 0.8f, p);
+        }
+      }
     } else {
       canvas.drawCircle(18f, 18f, 6.8f, p);
       canvas.drawCircle(18f, 18f, 2.6f, p);

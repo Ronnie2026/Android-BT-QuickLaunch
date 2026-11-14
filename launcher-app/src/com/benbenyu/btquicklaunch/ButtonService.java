@@ -31,7 +31,7 @@ public class ButtonService extends AccessibilityService {
     if (bluetoothEvents == null) {
       bluetoothEvents =
           new android.content.BroadcastReceiver() {
-            public void onReceive(android.content.Context c, Intent in) {android.bluetooth.BluetoothDevice device=in.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE);if(device!=null&&!DeviceConfig.KEYBOARD_MAC.equals(device.getAddress()))return;String act=in.getAction();if(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(act))onInterrupt();
+            public void onReceive(android.content.Context c, Intent in) {android.bluetooth.BluetoothDevice device=in.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE);if(device!=null&&!DeviceConfig.KEYBOARD_MAC.equals(device.getAddress()))return;String act=in.getAction();if("android.bluetooth.device.action.BATTERY_LEVEL_CHANGED".equals(act)){int lvl=in.getIntExtra("android.bluetooth.device.extra.BATTERY_LEVEL",-1);if(lvl>=0&&lvl<=100){HidConnectionManager.batteryLevel=lvl;AppLog.write("BT_BATTERY source=broadcast level="+lvl,null);Runnable cb=HidConnectionManager.onStateChanged;if(cb!=null)cb.run();}return;}if(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(act))onInterrupt();
               if(hid!=null){if(android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED.equals(act))hid.onAclConnected();else hid.signal();}
               AppLog.write(
                   "BT_EVENT "
@@ -51,6 +51,7 @@ public class ButtonService extends AccessibilityService {
           new android.content.IntentFilter(android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED);
       filter.addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED);
       filter.addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED);
+      filter.addAction("android.bluetooth.device.action.BATTERY_LEVEL_CHANGED");
       registerReceiver(bluetoothEvents, filter);
     }
   }

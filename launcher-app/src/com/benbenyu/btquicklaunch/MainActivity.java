@@ -155,8 +155,13 @@ public class MainActivity extends Activity {
       }
     }
     bluetoothIcon.connected = connected;
+    bluetoothIcon.level = connected ? HidConnectionManager.batteryLevel : -1;
     bluetoothIcon.invalidate();
-    bluetoothIcon.setContentDescription(connected ? "蓝牙键盘已连接" : "蓝牙键盘已断开");
+    bluetoothIcon.setContentDescription(
+        connected
+            ? ("蓝牙键盘已连接"
+                + (bluetoothIcon.level >= 0 ? (" 电量 " + bluetoothIcon.level + "%") : ""))
+            : "蓝牙键盘已断开");
   }
 
   protected void onResume() {
