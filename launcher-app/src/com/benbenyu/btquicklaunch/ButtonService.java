@@ -31,8 +31,8 @@ public class ButtonService extends AccessibilityService {
     if (bluetoothEvents == null) {
       bluetoothEvents =
           new android.content.BroadcastReceiver() {
-            public void onReceive(android.content.Context c, Intent in) {android.bluetooth.BluetoothDevice device=in.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE);if(device!=null&&!DeviceConfig.KEYBOARD_MAC.equals(device.getAddress()))return;if(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(in.getAction()))onInterrupt();
-              if(hid!=null)hid.signal();
+            public void onReceive(android.content.Context c, Intent in) {android.bluetooth.BluetoothDevice device=in.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE);if(device!=null&&!DeviceConfig.KEYBOARD_MAC.equals(device.getAddress()))return;String act=in.getAction();if(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(act))onInterrupt();
+              if(hid!=null){if(android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED.equals(act))hid.onAclConnected();else hid.signal();}
               AppLog.write(
                   "BT_EVENT "
                       + in.getAction()
