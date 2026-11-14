@@ -60,6 +60,7 @@ adb shell cmd package set-home-activity com.benbenyu.btquicklaunch/.MainActivity
 | `phone-config/` | Magisk 开机脚本、设备测试脚本 |
 | `build-home.ps1` | 构建与签名脚本 |
 | `docs/` | 架构与项目状态 |
+| `CONTRIBUTING.md` | 贡献规则（中英文 README 必须同步） |
 
 ## 许可证
 

@@ -60,6 +60,7 @@ Then enable the accessibility service, pair the keyboard, and optionally install
 | `phone-config/` | Magisk boot script and device QA scripts |
 | `build-home.ps1` | Build and sign script |
 | `docs/` | Architecture and project status |
+| `CONTRIBUTING.md` | Contribution rules (READMEs must stay in sync) |
 
 ## License
 
