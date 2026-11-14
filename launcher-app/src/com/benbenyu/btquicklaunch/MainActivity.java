@@ -402,24 +402,33 @@ public class MainActivity extends Activity {
     cancelLaunch();
     if (settingsDialog == null || !settingsDialog.isShowing()) settingsPanel();
     settingsContent.removeAllViews();
+    boolean paper = p.getBoolean("paper_theme", false);
     LinearLayout header = new LinearLayout(this);
-    TextView back = text("‹ 返回", 16);
+    header.setGravity(Gravity.CENTER_VERTICAL);
+    header.setPadding(0, 0, 0, dp(8));
+    TextView back = new TextView(this);
+    back.setText("‹ 返回");
+    back.setTextSize(16);
+    back.setTextColor(IosUi.accent(paper));
+    back.setPadding(dp(8), dp(8), dp(14), dp(8));
     back.setOnClickListener(v -> settingsPanel());
     header.addView(back);
-    header.addView(text(title, 20));
+    TextView titleView = new TextView(this);
+    titleView.setText(title);
+    titleView.setTextSize(18);
+    titleView.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+    titleView.setTextColor(IosUi.textPrimary(paper));
+    header.addView(titleView);
     settingsContent.addView(header);
   }
 
   void option(String name, Runnable action) {
-    TextView item = text(name + "  ›", 17);
-    GradientDrawable bg = new GradientDrawable();
-    bg.setColor(0xff202731);
-    bg.setCornerRadius(dp(12));
-    item.setBackground(bg);
-    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(48));
-    lp.setMargins(0, dp(4), 0, 0);
-    settingsContent.addView(item, lp);
-    item.setOnClickListener(v -> action.run());
+    boolean paper = p.getBoolean("paper_theme", false);
+    LinearLayout card = IosUi.card(this, paper);
+    card.addView(IosUi.disclosureRow(this, name, "", paper, false, action));
+    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+    lp.setMargins(dp(4), dp(4), dp(4), dp(4));
+    settingsContent.addView(card, lp);
   }
 
   void iconMenu(int slot) {
@@ -474,47 +483,58 @@ public class MainActivity extends Activity {
     if (settingsDialog != null && settingsDialog.isShowing()) settingsDialog.dismiss();
     final Dialog dialog = new Dialog(this){public boolean dispatchTouchEvent(android.view.MotionEvent e){if(e.getActionMasked()==android.view.MotionEvent.ACTION_DOWN&&idlePower!=null)idlePower.activity("settings_touch");return super.dispatchTouchEvent(e);}};
     settingsDialog = dialog;
+    boolean paper = p.getBoolean("paper_theme", false);
     LinearLayout panel = new LinearLayout(this);
     panel.setOrientation(1);
-    panel.setPadding(dp(18), dp(10), dp(18), dp(10));
-    panel.setBackgroundColor(0xff101318);
-    LinearLayout tabs = new LinearLayout(this);
-    String[] titles = {"启动 APP 设置", "壁纸设置", "其他设置"};
+    panel.setPadding(dp(16), dp(10), dp(16), dp(10));
+    panel.setBackgroundColor(IosUi.bg(paper));
+
+    LinearLayout topBar = new LinearLayout(this);
+    topBar.setGravity(Gravity.CENTER_VERTICAL);
+    topBar.setPadding(dp(4), dp(2), dp(4), dp(10));
+
+    LinearLayout seg = new LinearLayout(this);
+    seg.setPadding(dp(3), dp(3), dp(3), dp(3));
+    seg.setBackground(IosUi.roundRect(IosUi.pillColor(paper), 12, this));
+    String[] titles = {"启动应用", "壁纸", "通用设置"};
     for (int i = 0; i < 3; i++) {
       final int n = i;
-      TextView tab = text(titles[i], 18);
+      TextView tab = new TextView(this);
+      tab.setText(titles[i]);
+      tab.setTextSize(15);
+      tab.setTypeface(i == settingsTab ? android.graphics.Typeface.DEFAULT_BOLD : android.graphics.Typeface.DEFAULT);
       tab.setGravity(Gravity.CENTER);
-      tab.setTextColor(i == settingsTab ? 0xfff1f4f9 : 0xff929bac);
-      GradientDrawable tabBg = new GradientDrawable();
-      tabBg.setColor(i == settingsTab ? 0xff303744 : 0xff171c24);
-      tabBg.setCornerRadius(dp(14));
-      tab.setBackground(tabBg);
-      tabs.addView(tab, new LinearLayout.LayoutParams(0, dp(52), 1));
+      tab.setTextColor(i == settingsTab ? IosUi.textPrimary(paper) : IosUi.textSecondary(paper));
+      if (i == settingsTab)
+        tab.setBackground(IosUi.roundRect(paper ? 0xffffffff : 0xff48484a, 9, this));
+      seg.addView(tab, new LinearLayout.LayoutParams(0, dp(36), 1));
       tab.setOnClickListener(
           v -> {
             settingsTab = n;
             for (int j = 0; j < 3; j++) {
-              TextView t = (TextView) tabs.getChildAt(j);
-              t.setTextColor(j == n ? 0xfff1f4f9 : 0xff929bac);
-              GradientDrawable tb = new GradientDrawable();
-              tb.setColor(j == n ? 0xff303744 : 0xff171c24);
-              tb.setCornerRadius(dp(14));
-              t.setBackground(tb);
+              TextView t = (TextView) seg.getChildAt(j);
+              t.setTypeface(j == n ? android.graphics.Typeface.DEFAULT_BOLD : android.graphics.Typeface.DEFAULT);
+              t.setTextColor(j == n ? IosUi.textPrimary(paper) : IosUi.textSecondary(paper));
+              t.setBackground(
+                  j == n ? IosUi.roundRect(paper ? 0xffffffff : 0xff48484a, 9, this) : null);
             }
             settingsContent.removeAllViews();
             if (n == 0) fillApps(settingsContent, dialog);
             else if (n == 1) fillWallpapers(settingsContent);
             else fillOther(settingsContent);
-            if (p.getBoolean("paper_theme", false)) {
-              paperStyle(settingsContent);
-              paperStyle(tabs);
-            }
           });
     }
-    TextView done = text("完成", 16);
+    topBar.addView(seg, new LinearLayout.LayoutParams(0, -2, 1));
+    TextView done = new TextView(this);
+    done.setText("完成");
+    done.setTextSize(16);
+    done.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+    done.setTextColor(IosUi.accent(paper));
+    done.setPadding(dp(18), dp(8), dp(6), dp(8));
     done.setOnClickListener(v -> dialog.dismiss());
-    tabs.addView(done);
-    panel.addView(tabs);
+    topBar.addView(done);
+    panel.addView(topBar);
+
     settingsContent = new LinearLayout(this);
     settingsContent.setOrientation(1);
     panel.addView(settingsContent, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -526,10 +546,10 @@ public class MainActivity extends Activity {
     dialog.show();
     dialog.getWindow().setLayout(-1, -1);
     dialog.getWindow().getDecorView().setSystemUiVisibility(5894);
-    if (p.getBoolean("paper_theme", false)) paperStyle(panel);
   }
 
   void fillApps(LinearLayout grid, Dialog dialog) {
+    boolean paper = p.getBoolean("paper_theme", false);
     for (int row = 0; row < 2; row++) {
       LinearLayout line = new LinearLayout(this);
       grid.addView(line, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -537,13 +557,10 @@ public class MainActivity extends Activity {
         final int n = row * 2 + col;
         LinearLayout card = new LinearLayout(this);
         card.setGravity(Gravity.CENTER_VERTICAL);
-        card.setPadding(dp(14), dp(8), dp(14), dp(8));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0xff1c222b);
-        bg.setCornerRadius(dp(22));
-        card.setBackground(bg);
+        card.setPadding(dp(18), dp(10), dp(14), dp(10));
+        card.setBackground(IosUi.roundRect(IosUi.cardColor(paper), 18, this));
         LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(0, -1, 1);
-        cp.setMargins(dp(4), dp(4), dp(4), dp(4));
+        cp.setMargins(dp(5), dp(5), dp(5), dp(5));
         line.addView(card, cp);
         ImageView icon = new ImageView(this);
         icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
@@ -552,34 +569,50 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) {
           icon.setImageResource(android.R.drawable.sym_def_app_icon);
         }
-        card.addView(icon, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        if (paper) {
+          android.graphics.ColorMatrix gray = new android.graphics.ColorMatrix();
+          gray.setSaturation(0);
+          icon.setColorFilter(new android.graphics.ColorMatrixColorFilter(gray));
+        }
+        card.addView(icon, new LinearLayout.LayoutParams(dp(50), dp(50)));
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(1);
+        info.setPadding(dp(14), 0, dp(8), 0);
         card.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView label = text("位置 " + (n + 1) + "  ·  " + get(n, "name", names[n]), 17);
+        TextView label = new TextView(this);
+        label.setText("位置 " + (n + 1) + " · " + get(n, "name", names[n]));
+        label.setTextSize(17);
+        label.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        label.setTextColor(IosUi.textPrimary(paper));
         info.addView(label);
-        TextView hint =
-            text(
-                supportsVoice(get(n, "pkg", pkgs[n])) && p.getBoolean(n + "voice", true)
-                    ? "智能联网 · 自动语音"
-                    : needsProxy(n, get(n, "pkg", pkgs[n])) ? "智能联网 · 轻点更换应用" : "轻点更换应用",
-                12);
-        hint.setTextColor(0xff9ba9b9);
-        hint.setPadding(dp(12), 0, 0, 0);
+        String pkgName = get(n, "pkg", pkgs[n]);
+        TextView hint = new TextView(this);
+        hint.setText(
+            supportsVoice(pkgName) && p.getBoolean(n + "voice", true)
+                ? "VPN 检测 · 自动语音"
+                : needsProxy(n, pkgName) ? "VPN 检测 · 点击更换" : "点击更换应用");
+        hint.setTextSize(13);
+        hint.setTextColor(IosUi.textSecondary(paper));
+        hint.setPadding(0, dp(2), 0, 0);
         info.addView(hint);
         card.setOnClickListener(
             v -> {
               dialog.dismiss();
               pick(n, false);
             });
-        TextView more = text("⋯", 24);
-        card.addView(more);
+        TextView more = new TextView(this);
+        more.setText("⋯");
+        more.setTextSize(20);
+        more.setGravity(Gravity.CENTER);
+        more.setTextColor(IosUi.accent(paper));
+        more.setBackground(IosUi.roundRect(IosUi.pillColor(paper), 16, this));
         more.setContentDescription("位置" + (n + 1) + "高级设置");
         more.setOnClickListener(
             v -> {
               dialog.dismiss();
               iconMenu(n);
             });
+        card.addView(more, new LinearLayout.LayoutParams(dp(36), dp(36)));
       }
     }
   }
@@ -645,112 +678,78 @@ public class MainActivity extends Activity {
   }
 
   void fillOther(LinearLayout content) {
+    boolean paper = p.getBoolean("paper_theme", false);
     ScrollView scroll = new ScrollView(this);
     LinearLayout body = new LinearLayout(this);
     body.setOrientation(1);
+    body.setPadding(0, 0, 0, dp(24));
     scroll.addView(body);
     content.addView(scroll);
-    body.addView(text("色彩主题", 20));
-    Switch theme = new Switch(this);
-    theme.setText("电子书 · 纸白与灰度图标（关闭为原彩色）");
-    theme.setTextColor(Color.WHITE);
-    theme.setChecked(p.getBoolean("paper_theme", false));
-    body.addView(theme);
-    theme.setOnCheckedChangeListener(
-        (v, on) -> {
-          p.edit().putBoolean("paper_theme", on).apply();
-          draw();
-          settingsPanel();
-        });
-    Switch idle=new Switch(this);idle.setText("2 分钟无活动自动最暗（触摸或 HID 立即恢复）");idle.setTextColor(p.getBoolean("paper_theme",false)?0xff252525:Color.WHITE);idle.setChecked(p.getBoolean("idle_power",true));body.addView(idle);idle.setOnCheckedChangeListener((v,on)->{p.edit().putBoolean("idle_power",on).apply();if(idlePower!=null){idlePower.setDim(false);idlePower.activity("setting");}});
-    Switch btSound = new Switch(this);
-    btSound.setText("蓝牙键盘连接成功提示音");
-    btSound.setTextColor(p.getBoolean("paper_theme", false) ? 0xff252525 : Color.WHITE);
-    btSound.setChecked(p.getBoolean("bt_connect_sound", true));
-    body.addView(btSound);
-    btSound.setOnCheckedChangeListener(
-        (v, on) -> p.edit().putBoolean("bt_connect_sound", on).apply());
-    body.addView(text("输入法与语音", 20));
-    int fg = p.getBoolean("paper_theme", false) ? 0xff252525 : Color.WHITE;
-    LinearLayout imeRow = new LinearLayout(this);
-    imeRow.setGravity(Gravity.CENTER_VERTICAL);
-    TextView imeInfo = new TextView(this);
-    imeInfo.setText("ⓘ");
-    imeInfo.setTextSize(18);
-    imeInfo.setTextColor(0xff7cb3ff);
-    imeInfo.setPadding(dp(8), dp(6), dp(10), dp(6));
-    imeInfo.setContentDescription("完全禁用输入法说明");
-    imeInfo.setOnClickListener(
-        v ->
-            new AlertDialog.Builder(this)
-                .setTitle("完全禁用输入法")
-                .setMessage(
-                    "开启后（默认开启）：\n"
-                        + "• 自动禁用系统所有软键盘输入法，保持纯粹的语音交互体验。\n"
-                        + "• 防止进入 Gemini / ChatGPT 等应用时自动弹出输入法，避免键盘遮挡底部的语音按钮，大幅提高自动模拟点击进入语音模式的成功率。\n\n"
-                        + "需要打字时：\n"
-                        + "• 临时关闭此开关即可自动恢复原输入法，进入应用后即可正常使用键盘。")
-                .setPositiveButton("知道了", null)
-                .show());
-    imeRow.addView(imeInfo);
-    Switch imeSwitch = new Switch(this);
-    imeSwitch.setText("完全禁用输入法（默认开启，保持纯语音）");
-    imeSwitch.setTextColor(fg);
-    imeSwitch.setChecked(p.getBoolean("disable_ime", true));
-    imeRow.addView(imeSwitch, new LinearLayout.LayoutParams(0, -2, 1));
-    imeSwitch.setOnCheckedChangeListener(
-        (v, on) -> {
-          p.edit().putBoolean("disable_ime", on).apply();
-          ImeGuard.apply(this, p, on, true);
-        });
-    body.addView(imeRow);
-    TextView imeHint = text("禁用输入法有助于提高按钮模拟点击的成功率，避免输入法弹出遮挡语音按钮", 12);
-    imeHint.setTextColor(0xff919cab);
-    imeHint.setPadding(dp(12), 0, dp(12), dp(8));
-    body.addView(imeHint);
-    body.addView(text("网络与代理", 20));
-    Switch guard = new Switch(this);
-    guard.setText("海外应用启动前检测 VPN，未开启则自动启用 Clash Meta");
-    guard.setTextColor(fg);
-    guard.setChecked(p.getBoolean("proxy_guard", true));
-    body.addView(guard);
-    guard.setOnCheckedChangeListener((v, on) -> p.edit().putBoolean("proxy_guard", on).apply());
-    Switch bootProxy = new Switch(this);
-    bootProxy.setText("桌面启动时检测 VPN，未运行则自动启动 Clash Meta");
-    bootProxy.setTextColor(fg);
-    bootProxy.setChecked(p.getBoolean("proxy_on_boot", true));
-    body.addView(bootProxy);
-    bootProxy.setOnCheckedChangeListener(
-        (v, on) -> p.edit().putBoolean("proxy_on_boot", on).apply());
-    Button proxyAppsBtn = new Button(this);
-    proxyAppsBtn.setText("配置需检测 VPN 的应用（已配置 " + ProxyGuard.configuredApps(p).size() + " 项）  ›");
-    body.addView(proxyAppsBtn);
-    proxyAppsBtn.setOnClickListener(v -> pickProxyApps());
-    body.addView(
-        text("默认包含 ChatGPT / Grok / Gemini，可在上方随时增删任何已安装应用。仅做本地检测（VPN 隧道、本地端口、Clash 进程），不发起外网探测请求。", 13));
-    TextView diag = text("点击下方按钮查看当前本地网络与 VPN 状态", 14);
-    Button check = new Button(this);
-    check.setText("立即检测 VPN 与代理状态");
-    body.addView(check);
-    body.addView(diag);
-    check.setOnClickListener(v -> proxyDiagnose(diag));
-    body.addView(text("显示与状态", 20));
-    Switch breathing = new Switch(this);
-    breathing.setText("后台横线呼吸动画");
-    breathing.setTextColor(Color.WHITE);
-    breathing.setChecked(p.getBoolean("breathing", true));
-    body.addView(breathing);
-    breathing.setOnCheckedChangeListener(
-        (v, on) -> {
-          p.edit().putBoolean("breathing", on).apply();
-          draw();
-        });
-    TextView brightness = text("桌面亮度 · 0 跟随系统", 15);
-    body.addView(brightness);
+
+    body.addView(IosUi.header(this, "外观与显示", paper));
+    LinearLayout appCard = IosUi.card(this, paper);
+    appCard.addView(
+        IosUi.switchRow(
+            this,
+            "电子书纸白主题",
+            paper,
+            paper,
+            null,
+            (v, on) -> {
+              p.edit().putBoolean("paper_theme", on).apply();
+              draw();
+              settingsPanel();
+            }));
+    appCard.addView(IosUi.divider(this, paper));
+    appCard.addView(
+        IosUi.switchRow(
+            this,
+            "2 分钟无操作自动调暗",
+            p.getBoolean("idle_power", true),
+            paper,
+            null,
+            (v, on) -> {
+              p.edit().putBoolean("idle_power", on).apply();
+              if (idlePower != null) {
+                idlePower.setDim(false);
+                idlePower.activity("setting");
+              }
+            }));
+    appCard.addView(IosUi.divider(this, paper));
+    appCard.addView(
+        IosUi.switchRow(
+            this,
+            "后台横线呼吸动画",
+            p.getBoolean("breathing", true),
+            paper,
+            null,
+            (v, on) -> {
+              p.edit().putBoolean("breathing", on).apply();
+              draw();
+            }));
+    appCard.addView(IosUi.divider(this, paper));
+    LinearLayout brightRow = new LinearLayout(this);
+    brightRow.setOrientation(1);
+    brightRow.setPadding(dp(16), dp(12), dp(16), dp(12));
+    LinearLayout brightTop = new LinearLayout(this);
+    brightTop.setGravity(Gravity.CENTER_VERTICAL);
+    TextView brightTitle = new TextView(this);
+    brightTitle.setText("桌面亮度");
+    brightTitle.setTextSize(16);
+    brightTitle.setTextColor(IosUi.textPrimary(paper));
+    brightTop.addView(brightTitle, new LinearLayout.LayoutParams(0, -2, 1));
+    int curB = p.getInt("brightness", 0);
+    TextView brightVal = new TextView(this);
+    brightVal.setText(curB == 0 ? "跟随系统" : curB + "%");
+    brightVal.setTextSize(15);
+    brightVal.setTextColor(IosUi.textSecondary(paper));
+    brightTop.addView(brightVal);
+    brightRow.addView(brightTop);
     SeekBar slider = new SeekBar(this);
     slider.setMax(100);
-    slider.setProgress(p.getInt("brightness", 0));
-    body.addView(slider);
+    slider.setProgress(curB);
+    slider.setPadding(0, dp(8), 0, 0);
+    brightRow.addView(slider);
     slider.setOnSeekBarChangeListener(
         new SeekBar.OnSeekBarChangeListener() {
           public void onStartTrackingTouch(SeekBar v) {}
@@ -761,52 +760,148 @@ public class MainActivity extends Activity {
             if (user) {
               p.edit().putInt("brightness", n).apply();
               applyBrightness();
-              brightness.setText(n == 0 ? "桌面亮度 · 跟随系统" : "桌面亮度 · " + n + "%");
+              brightVal.setText(n == 0 ? "跟随系统" : n + "%");
             }
           }
         });
-    body.addView(text("橙线：进程运行中    灰线：检测失败    无横线：未运行", 14));
-    Button classic = new Button(this);
-    classic.setText("进入系统经典桌面（临时操作其他应用）");
-    body.addView(classic);
-    classic.setOnClickListener(v -> openClassicHome());
-    Button logs = new Button(this);
-    logs.setText("导出今天的运行与崩溃日志");
-    body.addView(logs);
-    logs.setOnClickListener(
-        v ->
-            startActivityForResult(
-                new Intent(Intent.ACTION_CREATE_DOCUMENT)
-                    .setType("text/plain")
-                    .putExtra(
-                        Intent.EXTRA_TITLE,
-                        new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT)
-                                .format(new java.util.Date())
-                            + ".log")
-                    .addCategory(Intent.CATEGORY_OPENABLE),
-                95));
-    Button backup = new Button(this);
-    backup.setText("导出配置备份");
-    body.addView(backup);
-    backup.setOnClickListener(
-        v ->
-            startActivityForResult(
-                new Intent(Intent.ACTION_CREATE_DOCUMENT)
-                    .setType("application/zip")
-                    .putExtra(Intent.EXTRA_TITLE, "SimpleHome-backup.zip")
-                    .addCategory(Intent.CATEGORY_OPENABLE),
-                93));
-    Button restore = new Button(this);
-    restore.setText("导入配置备份");
-    body.addView(restore);
-    restore.setOnClickListener(
-        v ->
-            startActivityForResult(
-                new Intent(Intent.ACTION_OPEN_DOCUMENT)
-                    .setType("application/zip")
-                    .addCategory(Intent.CATEGORY_OPENABLE),
-                94));
-    body.addView(text("BT QuickLaunch 1.2.0 · 双击 1/2/3 启动 · 三键清理", 14));
+    appCard.addView(brightRow);
+    body.addView(appCard);
+    body.addView(IosUi.footer(this, "底部横线状态：橙色表示运行中，灰色表示检测失败，无横线表示未运行。", paper));
+
+    body.addView(IosUi.header(this, "输入法与语音", paper));
+    LinearLayout imeCard = IosUi.card(this, paper);
+    imeCard.addView(
+        IosUi.switchRow(
+            this,
+            "完全禁用输入法（纯语音）",
+            p.getBoolean("disable_ime", true),
+            paper,
+            () ->
+                new AlertDialog.Builder(this)
+                    .setTitle("完全禁用输入法")
+                    .setMessage(
+                        "开启后（默认开启）：\n"
+                            + "• 自动禁用系统所有软键盘输入法，保持纯粹的语音交互体验。\n"
+                            + "• 防止进入 Gemini / ChatGPT 等应用时自动弹出输入法，避免键盘遮挡底部的语音按钮，大幅提高自动模拟点击进入语音模式的成功率。\n\n"
+                            + "需要打字时：\n"
+                            + "• 临时关闭此开关即可自动恢复原输入法，进入应用后即可正常使用键盘。")
+                    .setPositiveButton("知道了", null)
+                    .show(),
+            (v, on) -> {
+              p.edit().putBoolean("disable_ime", on).apply();
+              ImeGuard.apply(this, p, on, true);
+            }));
+    body.addView(imeCard);
+    body.addView(IosUi.footer(this, "禁用输入法有助于提高按钮模拟点击的成功率，避免输入法弹出遮挡语音按钮。", paper));
+
+    body.addView(IosUi.header(this, "蓝牙键盘", paper));
+    LinearLayout btCard = IosUi.card(this, paper);
+    btCard.addView(
+        IosUi.switchRow(
+            this,
+            "蓝牙键盘HID 断开与连接提示音",
+            p.getBoolean("bt_connect_sound", true),
+            paper,
+            null,
+            (v, on) -> p.edit().putBoolean("bt_connect_sound", on).apply()));
+    body.addView(btCard);
+
+    body.addView(IosUi.header(this, "网络与 VPN 代理", paper));
+    LinearLayout netCard = IosUi.card(this, paper);
+    netCard.addView(
+        IosUi.switchRow(
+            this,
+            "启动应用前检测 VPN",
+            p.getBoolean("proxy_guard", true),
+            paper,
+            null,
+            (v, on) -> p.edit().putBoolean("proxy_guard", on).apply()));
+    netCard.addView(IosUi.divider(this, paper));
+    netCard.addView(
+        IosUi.switchRow(
+            this,
+            "桌面启动时自动开启 Clash",
+            p.getBoolean("proxy_on_boot", true),
+            paper,
+            null,
+            (v, on) -> p.edit().putBoolean("proxy_on_boot", on).apply()));
+    netCard.addView(IosUi.divider(this, paper));
+    netCard.addView(
+        IosUi.disclosureRow(
+            this,
+            "需检测 VPN 的应用",
+            ProxyGuard.configuredApps(p).size() + " 项",
+            paper,
+            false,
+            this::pickProxyApps));
+    netCard.addView(IosUi.divider(this, paper));
+    LinearLayout diagRow =
+        IosUi.disclosureRow(this, "立即检测本地 VPN 状态", "点击检测", paper, true, () -> {});
+    TextView diagVal = (TextView) diagRow.getChildAt(1);
+    diagRow.setOnClickListener(v -> proxyDiagnose(diagVal));
+    netCard.addView(diagRow);
+    body.addView(netCard);
+    body.addView(
+        IosUi.footer(this, "默认支持 ChatGPT / Grok / Gemini，仅在本地检测 VPN 隧道与端口，不发起外网请求。", paper));
+
+    body.addView(IosUi.header(this, "系统与备份", paper));
+    LinearLayout sysCard = IosUi.card(this, paper);
+    sysCard.addView(
+        IosUi.disclosureRow(this, "进入系统经典桌面", "临时操作其他应用", paper, false, this::openClassicHome));
+    sysCard.addView(IosUi.divider(this, paper));
+    sysCard.addView(
+        IosUi.disclosureRow(
+            this,
+            "导出运行与崩溃日志",
+            "",
+            paper,
+            false,
+            () ->
+                startActivityForResult(
+                    new Intent(Intent.ACTION_CREATE_DOCUMENT)
+                        .setType("text/plain")
+                        .putExtra(
+                            Intent.EXTRA_TITLE,
+                            new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT)
+                                    .format(new java.util.Date())
+                                + ".log")
+                        .addCategory(Intent.CATEGORY_OPENABLE),
+                    95)));
+    sysCard.addView(IosUi.divider(this, paper));
+    sysCard.addView(
+        IosUi.disclosureRow(
+            this,
+            "导出配置备份",
+            "",
+            paper,
+            false,
+            () ->
+                startActivityForResult(
+                    new Intent(Intent.ACTION_CREATE_DOCUMENT)
+                        .setType("application/zip")
+                        .putExtra(Intent.EXTRA_TITLE, "SimpleHome-backup.zip")
+                        .addCategory(Intent.CATEGORY_OPENABLE),
+                    93)));
+    sysCard.addView(IosUi.divider(this, paper));
+    sysCard.addView(
+        IosUi.disclosureRow(
+            this,
+            "导入配置备份",
+            "",
+            paper,
+            false,
+            () ->
+                startActivityForResult(
+                    new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                        .setType("application/zip")
+                        .addCategory(Intent.CATEGORY_OPENABLE),
+                    94)));
+    body.addView(sysCard);
+
+    TextView ver = IosUi.footer(this, "BT QuickLaunch 1.2.0 · 双击 1 / 2 / 3 启动 · 三键清理", paper);
+    ver.setGravity(Gravity.CENTER);
+    ver.setPadding(0, dp(18), 0, dp(8));
+    body.addView(ver);
   }
 
   void fillWallpapers(LinearLayout content) {
