@@ -13,8 +13,8 @@ final class HidConnectionManager {
  boolean batteryQueried, announcedConnected, awaitingConnectionBattery;
  int lastKnownBattery = -1;
  volatile BluetoothGatt batteryGatt;
- final java.util.Set<android.media.ToneGenerator> tones = new java.util.HashSet<>();
  OfflineVoiceAlerts batteryVoice;
+ SystemTonePlayer systemTone;
  Runnable batteryWarning = this::speakLowBattery;
  Runnable phoneWarning = () -> notifyReminder("reminder_phone_low", "phone-low-battery.wav", android.media.ToneGenerator.TONE_PROP_BEEP2);
  final Runnable batteryTimeout = () -> closeBatteryGatt(batteryGatt);
@@ -27,7 +27,7 @@ final class HidConnectionManager {
  void bind(){if(binding||Build.VERSION.SDK_INT!=30)return;binding=context.bindService(new Intent("android.bluetooth.IBluetoothHidHost").setClassName("com.android.bluetooth","com.android.bluetooth.hid.HidHostService"),connection,Context.BIND_AUTO_CREATE);AppLog.write("HID_BIND_REQUEST "+binding,null);}
  void start(){if(started)return;started=true;worker.start();h=new Handler(worker.getLooper());try{bind();}catch(Exception e){binding=false;AppLog.write("HID_BIND_ERROR",e);}h.post(tick);}
  void signal(){if(h==null||!started)return;h.post(()->{retry=0;nextAttempt=0;h.removeCallbacks(tick);h.post(tick);});}
- void stop(){started=false;connector.shutdownNow();if(h!=null)h.removeCallbacksAndMessages(null);closeBatteryGatt(batteryGatt);synchronized(tones){for(android.media.ToneGenerator tone:tones)tone.release();tones.clear();}if(batteryVoice!=null)batteryVoice.close();if(RootHidProvider.hid==binder)RootHidProvider.hid=null;currentState=-1;batteryLevel=-1;if(binding)try{context.unbindService(connection);}catch(Exception ignored){}binding=false;binder=null;worker.quitSafely();}
+ void stop(){started=false;connector.shutdownNow();if(h!=null)h.removeCallbacksAndMessages(null);closeBatteryGatt(batteryGatt);if(batteryVoice!=null)batteryVoice.close();if(systemTone!=null)systemTone.close();if(RootHidProvider.hid==binder)RootHidProvider.hid=null;currentState=-1;batteryLevel=-1;if(binding)try{context.unbindService(connection);}catch(Exception ignored){}binding=false;binder=null;worker.quitSafely();}
  int call(int transaction,BluetoothDevice device)throws Exception{IBinder service=binder;if(service==null||!"android.bluetooth.IBluetoothHidHost".equals(service.getInterfaceDescriptor()))throw new IllegalStateException("HID interface unavailable");Parcel data=Parcel.obtain(),reply=Parcel.obtain();try{data.writeInterfaceToken("android.bluetooth.IBluetoothHidHost");data.writeInt(1);device.writeToParcel(data,0);if(!service.transact(transaction,data,reply,0))throw new IllegalStateException("Unsupported HID transaction");reply.readException();return reply.readInt();}finally{data.recycle();reply.recycle();}}
  // State notifications are independent of the potentially slow root reconnect command.
  void updateState(int state, String source) {
@@ -153,23 +153,9 @@ final class HidConnectionManager {
   if ("voice".equals(context.getSharedPreferences("home", 0).getString("reminder_media", "voice"))) {
    if (batteryVoice == null) batteryVoice = new OfflineVoiceAlerts(context, h);
    batteryVoice.play(asset);
-  } else playNotificationTone(tone);
- }
- void playNotificationTone(int tone) {
-  android.media.ToneGenerator generated = null;
-  try {
-   generated = new android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 80);
-   final android.media.ToneGenerator sound = generated;
-   synchronized (tones) {
-    if (!started) { sound.release(); return; }
-    tones.add(sound);
-   }
-   sound.startTone(tone, 220);
-   AppLog.write("BT_HID_TONE type=" + tone, null);
-   h.postDelayed(() -> { synchronized (tones) { if (tones.remove(sound)) sound.release(); } }, 500);
-  } catch (Exception error) {
-   if (generated != null) synchronized (tones) { if (tones.remove(generated)) generated.release(); }
-   AppLog.write("REMINDER_TONE_FAILED", error);
+  } else {
+   if (systemTone == null) systemTone = new SystemTonePlayer(context, h);
+   systemTone.play(context.getSharedPreferences("home", 0).getString("reminder_tone", ""), tone);
   }
  }
  void speakLowBattery() {
@@ -179,7 +165,7 @@ final class HidConnectionManager {
   if (h == null || !started) return;
   h.post(() -> {
    if (batteryVoice != null) { batteryVoice.close(); batteryVoice = null; }
-   synchronized (tones) { for (android.media.ToneGenerator tone : tones) tone.release(); tones.clear(); }
+   if (systemTone != null) { systemTone.close(); systemTone = null; }
   });
  }
  void onPhoneBattery(int level, boolean charging) {

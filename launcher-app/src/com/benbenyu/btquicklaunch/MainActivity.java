@@ -12,7 +12,7 @@ import java.util.*;
 
 public class MainActivity extends Activity {
   FrameLayout desktopRoot, cleanFeedback;
-  android.media.ToneGenerator cleanTone;
+  SystemTonePlayer cleanTone, tonePreview;
   final Handler feedbackHandler = new Handler();
   IdlePower idlePower;
   NetIndicators networkIndicators;
@@ -187,6 +187,7 @@ public class MainActivity extends Activity {
   }
 
   protected void onPause() {
+    stopTonePreview();
     clearCleanFeedback();
     if(idlePower!=null)idlePower.stop();
     if (networkIndicators != null) networkIndicators.stop();
@@ -513,6 +514,7 @@ public class MainActivity extends Activity {
       seg.addView(tab, new LinearLayout.LayoutParams(0, dp(36), 1));
       tab.setOnClickListener(
           v -> {
+            stopTonePreview();
             settingsTab = n;
             for (int j = 0; j < 3; j++) {
               TextView t = (TextView) seg.getChildAt(j);
@@ -544,6 +546,7 @@ public class MainActivity extends Activity {
     if (settingsTab == 0) fillApps(settingsContent, dialog);
     else if (settingsTab == 1) fillWallpapers(settingsContent);
     else fillOther(settingsContent);
+    dialog.setOnDismissListener(ignored -> stopTonePreview());
     dialog.setContentView(panel);
     dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
     dialog.show();
@@ -804,6 +807,7 @@ public class MainActivity extends Activity {
           p.edit().putBoolean("clean_success_sound", on).apply();
           if (!on) releaseCleanTone();
         }));
+    addToneRows(cleanCard, "clean_success_tone", paper);
     body.addView(cleanCard);
     body.addView(IosUi.footer(this, "成功后显示派大星和“搞定了”，提示音使用系统短音。关闭提示音仍显示图片；静音／振动模式仅震动。", paper));
 
@@ -829,6 +833,7 @@ public class MainActivity extends Activity {
               dialog.dismiss();
             }).setNegativeButton("取消", null).show());
     reminderCard.addView(mediaRow);
+    addToneRows(reminderCard, "reminder_tone", paper);
     String[] reminderNames = {"键盘断开", "键盘已连接", "键盘电量过低", "手机电量过低"};
     String[] reminderKeys = {"reminder_keyboard_disconnected", "reminder_keyboard_connected",
         "reminder_keyboard_low", "reminder_phone_low"};
@@ -843,7 +848,7 @@ public class MainActivity extends Activity {
           }));
     }
     body.addView(reminderCard);
-    body.addView(IosUi.footer(this, "请开启手机响铃模式：只有响铃模式才播放提示语音／提示音；静音或振动模式下仅震动。默认开启提示语音，全部离线播放，音量跟随媒体音量。低电量阈值为低于 30%；键盘连接读取电量后及断开时提醒，手机每轮低电量提醒一次，充电时不提醒。", paper));
+    body.addView(IosUi.footer(this, "请开启手机响铃模式：只有响铃模式才播放提示语音／提示音；静音或振动模式下仅震动。默认开启提示语音，全部离线播放，语音跟随媒体音量，提示音跟随系统通知音量。低电量阈值为低于 30%；键盘连接读取电量后及断开时提醒，手机每轮低电量提醒一次，充电时不提醒。", paper));
 
     body.addView(IosUi.header(this, "网络与 VPN 代理", paper));
     LinearLayout netCard = IosUi.card(this, paper);
@@ -942,12 +947,70 @@ public class MainActivity extends Activity {
             .setPositiveButton("查看来源", (d, w) -> openCreditLink("https://commons.wikimedia.org/wiki/File:Patrick_Star_character.png"))
             .setNeutralButton("查看许可", (d, w) -> openCreditLink("https://creativecommons.org/licenses/by/3.0/"))
             .setNegativeButton("关闭", null).show()));
+    sysCard.addView(IosUi.divider(this, paper));
+    sysCard.addView(IosUi.disclosureRow(this, "系统音效来源与许可", "Android AOSP", paper, false,
+        () -> new AlertDialog.Builder(this).setTitle("内置系统音效")
+            .setMessage("8 段 Android AOSP 系统提示音已复制到应用资源中，全部离线播放，不访问其他手机的系统音频文件。\n许可：Apache License 2.0。\n原始 OGG 文件未修改，完整许可随 APK 提供。")
+            .setPositiveButton("查看来源", (d, w) -> openCreditLink("https://android.googlesource.com/platform/frameworks/base/+/1cdfff555f4a21f71ccc978290e2e212e2f8b168/data/sounds/notifications/ogg/"))
+            .setNeutralButton("查看许可", (d, w) -> openCreditLink("https://www.apache.org/licenses/LICENSE-2.0"))
+            .setNegativeButton("关闭", null).show()));
     body.addView(sysCard);
 
-    TextView ver = IosUi.footer(this, "BT QuickLaunch 1.4.0 · 双击 1 / 2 / 3 启动 · 三键清理", paper);
+    TextView ver = IosUi.footer(this, "BT QuickLaunch 1.5.0 · 双击 1 / 2 / 3 启动 · 三键清理", paper);
     ver.setGravity(Gravity.CENTER);
     ver.setPadding(0, dp(18), 0, dp(8));
     body.addView(ver);
+  }
+
+  void stopTonePreview() {
+    if (tonePreview != null) { tonePreview.close(); tonePreview = null; }
+  }
+
+  void previewTone(String toneId) {
+    if (tonePreview == null) tonePreview = new SystemTonePlayer(this, new Handler());
+    tonePreview.play(toneId, android.media.ToneGenerator.TONE_PROP_ACK);
+    if (!ReminderAudio.ringing(this)) Toast.makeText(this, "当前静音／振动模式，试听仅震动；请开启响铃模式", 1).show();
+  }
+
+  void addToneRows(LinearLayout card, String key, boolean paper) {
+    card.addView(IosUi.divider(this, paper));
+    LinearLayout row = IosUi.disclosureRow(this, "选择内置系统音效",
+        SystemTonePlayer.title(this, p.getString(key, "")), paper, false, () -> {});
+    row.setOnClickListener(v -> chooseSystemTone(key, (TextView) row.getChildAt(1)));
+    card.addView(row);
+    card.addView(IosUi.divider(this, paper));
+    card.addView(IosUi.disclosureRow(this, "试听已选提示音", "应用内置系统音效", paper, false,
+        () -> previewTone(p.getString(key, ""))));
+  }
+
+  void chooseSystemTone(String key, TextView value) {
+    stopTonePreview();
+    new Thread(() -> {
+      java.util.List<SystemTonePlayer.Entry> tones = SystemTonePlayer.list(this);
+      runOnUiThread(() -> {
+        if (isDestroyed() || isFinishing() || !desktopVisible) return;
+        String[] labels = new String[tones.size()];
+        int current = 0;
+        String selectedId = p.getString(key, "");
+        for (int i = 0; i < tones.size(); i++) {
+          labels[i] = tones.get(i).title;
+          if (tones.get(i).id.equals(selectedId)) current = i;
+        }
+        final int[] selected = {current};
+        AlertDialog picker = new AlertDialog.Builder(this).setTitle("选择内置系统音效（不支持外部导入）")
+            .setSingleChoiceItems(labels, current, (d, which) -> selected[0] = which)
+            .setPositiveButton("保存", (d, which) -> {
+              SystemTonePlayer.Entry tone = tones.get(selected[0]);
+              p.edit().putString(key, tone.id).apply();
+              value.setText(tone.title);
+              if (key.equals("reminder_tone")) ButtonService.remindersChanged();
+            }).setNeutralButton("试听", null).setNegativeButton("取消", null).create();
+        picker.setOnDismissListener(d -> stopTonePreview());
+        picker.setOnShowListener(d -> picker.getButton(AlertDialog.BUTTON_NEUTRAL)
+            .setOnClickListener(v -> previewTone(tones.get(selected[0]).id)));
+        picker.show();
+      });
+    }, "SystemToneList").start();
   }
 
   void openCreditLink(String url) {
@@ -1190,6 +1253,7 @@ public class MainActivity extends Activity {
   }
 
   protected void onDestroy() {
+    stopTonePreview();
     cancelLaunch();
     networkWorker.shutdownNow();
     statusHandler.removeCallbacksAndMessages(null);
@@ -1466,6 +1530,7 @@ public class MainActivity extends Activity {
   }
 
   void cancelLaunch() {
+    stopTonePreview();
     clearCleanFeedback();
     AppLog.write("CANCEL generation=" + launchGeneration, null);
     queuedSlot=-1;
@@ -1488,21 +1553,15 @@ public class MainActivity extends Activity {
   }
 
   void releaseCleanTone() {
-    if (cleanTone != null) { cleanTone.release(); cleanTone = null; }
+    if (cleanTone != null) { cleanTone.close(); cleanTone = null; }
   }
 
   void playCleanSuccessTone() {
     if (!p.getBoolean("clean_success_sound", true)) return;
     if (!ReminderAudio.ringing(this)) { ReminderAudio.vibrate(this); return; }
-    try {
-      cleanTone = new android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 80);
-      cleanTone.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 180);
-      feedbackHandler.postDelayed(this::releaseCleanTone, 500);
-      AppLog.write("CLEAN_SUCCESS_TONE played", null);
-    } catch (RuntimeException error) {
-      releaseCleanTone();
-      AppLog.write("CLEAN_SUCCESS_TONE_FAILED", error);
-    }
+    if (cleanTone == null) cleanTone = new SystemTonePlayer(this, feedbackHandler);
+    cleanTone.play(p.getString("clean_success_tone", ""), android.media.ToneGenerator.TONE_PROP_ACK);
+    AppLog.write("CLEAN_SUCCESS_TONE requested", null);
   }
 
   void showCleanFeedback() {

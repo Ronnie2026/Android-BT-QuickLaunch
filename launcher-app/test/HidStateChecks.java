@@ -109,7 +109,7 @@ public final class HidStateChecks {
       retained.get(1500, TimeUnit.MILLISECONDS);
       manager.stop();
       check(manager.connector.isShutdown(), "connector shutdown");
-      check(manager.batteryGatt == null && manager.tones.isEmpty(), "resources cleared");
+      check(manager.batteryGatt == null && (manager.systemTone == null || manager.systemTone.closed), "resources cleared");
       check(HidConnectionManager.currentState == -1, "stopped state cleared");
       System.out.println("PASS exhausted retry budget, duplicate broadcasts and shutdown cleanup");
     } finally {

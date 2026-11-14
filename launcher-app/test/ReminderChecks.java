@@ -94,6 +94,17 @@ public final class ReminderChecks {
           System.out.println("PASS offline audio parse " + asset + " duration=" + duration + "ms");
         } finally { player.release(); }
       }
+      for (SystemTonePlayer.Entry tone : SystemTonePlayer.list(app)) {
+        MediaExtractor decoder = new MediaExtractor();
+        try (AssetFileDescriptor file = app.getAssets().openFd(SystemTonePlayer.asset(tone.id))) {
+          decoder.setDataSource(file.getFileDescriptor(), file.getStartOffset(), file.getLength());
+          check(decoder.getTrackCount() > 0, "bundled tone audio track");
+          MediaFormat format = decoder.getTrackFormat(0);
+          check(format.getString(MediaFormat.KEY_MIME).startsWith("audio/"), "bundled tone MIME");
+          check(format.getLong(MediaFormat.KEY_DURATION) > 0, "bundled tone duration");
+          System.out.println("PASS bundled system tone " + tone.title);
+        } finally { decoder.release(); }
+      }
       System.out.println("PASS bounded voice queue and shutdown");
     } finally {
       manager.stop();

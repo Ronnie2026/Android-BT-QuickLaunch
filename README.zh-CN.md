@@ -19,6 +19,7 @@
 - 豆包启动后自动点击右上角电话按钮进入通话入口，按竖屏界面控件定位；通话仍受豆包账号额度限制。
 - 后台应用指示、电量 / Wi-Fi / 移动网络 / 蓝牙状态图标（支持通过 GATT 读取并显示蓝牙键盘电量）
 - 彩色与电子书风格主题，自定义壁纸和图标
+- 内置 8 段 Android AOSP 系统提示音，普通提醒与清理成功音效可分别选择、试听和保存；只播放应用资源，不依赖手机系统文件，不支持外部导入。
 - 应用图标统一按圆形显示，包括自定义图标；保留原始图片文件，清理 X 图标保持原样。
 - 新增车载／蓝牙组合应用图标，支持 Android 自适应图标
 - 2 分钟空闲自动调暗，降低 OLED 烧屏风险
@@ -53,7 +54,7 @@
 ## 安装
 
 ```bash
-adb install -r dist/BT-QuickLaunch-v1.4.0.apk
+adb install -r dist/BT-QuickLaunch-v1.5.0.apk
 adb shell cmd package set-home-activity com.benbenyu.btquicklaunch/.MainActivity
 ```
 
@@ -71,4 +72,4 @@ adb shell cmd package set-home-activity com.benbenyu.btquicklaunch/.MainActivity
 
 ## 许可证
 
-源代码：[MIT](LICENSE)。第三方图片：[许可与来源说明](THIRD_PARTY_NOTICES.md)。
+源代码：[MIT](LICENSE)。第三方素材：[许可与来源说明](THIRD_PARTY_NOTICES.md)。

@@ -1,6 +1,6 @@
 # Project status
 
-Version 1.4.0, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+Version 1.5.0, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
 
 ## Verified on device
 - Build, signing, install over existing version
@@ -10,7 +10,11 @@ Version 1.4.0, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (
 - Crash capture and previous-exit-reason logging
 - Root HID bridge connection accepted by the system
 
-## v1.4.0 validation
+## v1.5.0 validation
+- Eight AOSP OGG sounds are bundled in the APK; runtime playback uses only these assets, with no MediaStore or external file dependency.
+- SystemToneUriChecks passed fixed-ID validation and external/path/network rejection; DeviceChecks passed sound-selection backup round-trip and invalid external selection rejection.
+- ReminderChecks parsed all eight bundled sound files. SystemToneInstrumentation passed actual selected-sound playback, default fallback and cleanup in the application process.
+- The selection dialog was checked on device with preview/save/cancel controls.
 - Doubao phone-button automation passed: the observed resource ID is com.larus.nova:id/real_time_call, and the device log confirmed VOICE_CLICKED for com.larus.nova. Account quota exhaustion is an accepted proof of entry; a completed call is not claimed.
 - VoiceTargetChecks passed Doubao control matching, package isolation, and existing GPT/Gemini trigger checks.
 - Device cleanup returned exit code 0 and displayed the success overlay; physical three-key input also triggered this path.
