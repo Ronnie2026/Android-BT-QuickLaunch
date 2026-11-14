@@ -32,7 +32,7 @@ final class HidConnectionManager {
   try{
    device.connectGatt(context,false,new BluetoothGattCallback(){
     public void onConnectionStateChange(BluetoothGatt gatt,int status,int newState){
-     if(status==BluetoothGatt.GATT_SUCCESS&&newState==BluetoothProfile.STATE_CONNECTED){gatt.discoverServices();}
+     if(status==BluetoothGatt.GATT_SUCCESS&&newState==BluetoothProfile.STATE_CONNECTED){if(!gatt.discoverServices())gatt.close();}
      else if(newState==BluetoothProfile.STATE_DISCONNECTED||status!=BluetoothGatt.GATT_SUCCESS){gatt.close();}
     }
     public void onServicesDiscovered(BluetoothGatt gatt,int status){

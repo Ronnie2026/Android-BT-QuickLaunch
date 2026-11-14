@@ -15,11 +15,11 @@ The phone runs this launcher as its default home screen. A paired Bluetooth keyp
 - Fixed landscape home screen with four configurable app slots; long-press to swap slots
 - Bluetooth keypad shortcuts: double-press key 1/2/3 to open the first three slots; press all three keys to clear background apps and return home
 - Special ChatGPT flow: checks Google/ChatGPT connectivity, optionally starts a proxy (Clash) and re-checks, then starts voice mode
-- Background app indicator, battery / Wi-Fi / mobile / Bluetooth status icons
+- Background app indicator, battery / Wi-Fi / mobile / Bluetooth status icons (including BLE keyboard battery level when reported via GATT)
 - Color and e-paper style themes, custom wallpapers and icons
 - Idle dimming after 2 minutes to reduce OLED burn-in
-- Active HID reconnect to the paired keyboard
-- Config export / import (ZIP) and daily log export; crash logging
+- Fast HID reconnect on disconnect (3 retries, then passive wait during keyboard sleep)
+- Config export / import (ZIP), daily log export, crash logging, and one-tap entry to the classic system launcher in Settings
 
 ## Requirements and limitations
 

@@ -5,6 +5,7 @@ cmd package set-home-activity com.benbenyu.btquicklaunch/.MainActivity
 dumpsys deviceidle whitelist +com.benbenyu.btquicklaunch
 svc bluetooth enable
 settings --user 0 put secure accessibility_enabled 1
+settings --user 0 put secure show_ime_with_hard_keyboard 1
 am start --user 0 -a android.intent.action.MAIN -c android.intent.category.HOME -n com.benbenyu.btquicklaunch/.MainActivity
 SERVICE=com.benbenyu.btquicklaunch/com.benbenyu.btquicklaunch.ButtonService
 while true; do
