@@ -12,7 +12,7 @@ while true; do
  case ":$enabled:" in *":$SERVICE:"*|*":com.benbenyu.btquicklaunch/.ButtonService:"*) ;; *)
  case "$enabled" in null|'') enabled="$SERVICE" ;; *) enabled="$enabled:$SERVICE" ;; esac
  settings --user 0 put secure enabled_accessibility_services "$enabled" ;; esac
- if ! dumpsys activity services com.benbenyu.btquicklaunch | grep -q 'com.benbenyu.btquicklaunch/.ButtonService'; then
+ if ! dumpsys activity services com.benbenyu.btquicklaunch | grep -q 'ServiceRecord{.*com.benbenyu.btquicklaunch/.ButtonService'; then
  clean="$(settings --user 0 get secure enabled_accessibility_services | tr ':' '\n' | grep -v '^com.benbenyu.btquicklaunch/' | paste -sd ':' -)"
  settings --user 0 put secure enabled_accessibility_services "$clean"
  sleep 1

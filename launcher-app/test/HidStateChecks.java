@@ -36,6 +36,27 @@ public final class HidStateChecks {
       manager.updateState(BluetoothProfile.STATE_DISCONNECTED, "test_disconnect");
       check(!manager.announcedConnected, "disconnecting transition");
 
+      java.util.concurrent.atomic.AtomicInteger warnings = new java.util.concurrent.atomic.AtomicInteger();
+      manager.batteryWarning = warnings::incrementAndGet;
+      manager.updateState(BluetoothProfile.STATE_CONNECTED, "test_low_connect");
+      manager.updateBatteryLevel(29, "test");
+      manager.updateBatteryLevel(29, "test_duplicate");
+      check(warnings.get() == 1, "29 percent warns once on connection");
+      manager.updateState(BluetoothProfile.STATE_DISCONNECTED, "test_low_disconnect");
+      manager.updateState(BluetoothProfile.STATE_DISCONNECTED, "test_duplicate");
+      check(warnings.get() == 2, "low disconnect warns once using last known reading");
+      manager.updateState(BluetoothProfile.STATE_CONNECTED, "test_threshold");
+      manager.updateBatteryLevel(30, "test");
+      manager.updateBatteryLevel(-1, "test_invalid");
+      manager.updateBatteryLevel(101, "test_invalid");
+      manager.updateState(BluetoothProfile.STATE_DISCONNECTED, "test_threshold_disconnect");
+      check(warnings.get() == 2, "30 percent and invalid readings do not warn");
+      manager.lastKnownBattery = -1;
+      manager.updateState(BluetoothProfile.STATE_CONNECTED, "test_unknown");
+      manager.updateState(BluetoothProfile.STATE_DISCONNECTED, "test_unknown_disconnect");
+      check(warnings.get() == 2, "unknown battery does not warn");
+      System.out.println("PASS 29/30 percent boundary, unknown readings and warning deduplication");
+
       manager.worker.start();
       manager.h = new Handler(manager.worker.getLooper());
       manager.started = true;
@@ -69,6 +90,28 @@ public final class HidStateChecks {
       manager.h.post(reconnected);
       reconnected.get(1500, TimeUnit.MILLISECONDS);
       System.out.println("PASS initial state, intermediate states, disconnect and reconnect broadcasts");
+      FutureTask<Void> exhausted = new FutureTask<>(() -> {
+        manager.updateState(BluetoothProfile.STATE_DISCONNECTED, "test_exhausted");
+        manager.retry = manager.delays.length;
+        manager.nextAttempt = Long.MAX_VALUE;
+        return null;
+      });
+      manager.h.post(exhausted);
+      exhausted.get(1500, TimeUnit.MILLISECONDS);
+      manager.onBluetoothEvent(HidConnectionManager.ACTION_HID_STATE, BluetoothProfile.STATE_DISCONNECTED);
+      manager.onBluetoothEvent(BluetoothDevice.ACTION_ACL_DISCONNECTED, -1);
+      FutureTask<Void> retained = new FutureTask<>(() -> {
+        check(manager.retry == manager.delays.length, "duplicate disconnect preserves exhausted retry budget");
+        check(manager.nextAttempt == Long.MAX_VALUE, "duplicate disconnect preserves backoff");
+        return null;
+      });
+      manager.h.post(retained);
+      retained.get(1500, TimeUnit.MILLISECONDS);
+      manager.stop();
+      check(manager.connector.isShutdown(), "connector shutdown");
+      check(manager.batteryGatt == null && manager.tones.isEmpty(), "resources cleared");
+      check(HidConnectionManager.currentState == -1, "stopped state cleared");
+      System.out.println("PASS exhausted retry budget, duplicate broadcasts and shutdown cleanup");
     } finally {
       manager.binding = false;
       manager.stop();

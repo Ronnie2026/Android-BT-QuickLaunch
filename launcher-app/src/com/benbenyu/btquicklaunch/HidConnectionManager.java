@@ -10,7 +10,15 @@ final class HidConnectionManager {
  static final String ACTION_HID_STATE = "android.bluetooth.input.profile.action.CONNECTION_STATE_CHANGED";
  final java.util.concurrent.ExecutorService connector = java.util.concurrent.Executors.newSingleThreadExecutor();
  volatile boolean connecting;
- boolean batteryQueried, announcedConnected;
+ boolean batteryQueried, announcedConnected, awaitingConnectionBattery;
+ int lastKnownBattery = -1;
+ volatile BluetoothGatt batteryGatt;
+ final java.util.Set<android.media.ToneGenerator> tones = new java.util.HashSet<>();
+ OfflineVoiceAlerts batteryVoice;
+ Runnable batteryWarning = this::speakLowBattery;
+ Runnable phoneWarning = () -> notifyReminder("reminder_phone_low", "phone-low-battery.wav", android.media.ToneGenerator.TONE_PROP_BEEP2);
+ final Runnable batteryTimeout = () -> closeBatteryGatt(batteryGatt);
+
  long disconnectedUntil;
 
  final Context context;final HandlerThread worker=new HandlerThread("HidReconnect");Handler h;volatile IBinder binder;volatile boolean started,binding;long nextAttempt,nextBind;int retry,lastState=-1;final long[] delays={2000,5000,10000};
@@ -19,7 +27,7 @@ final class HidConnectionManager {
  void bind(){if(binding||Build.VERSION.SDK_INT!=30)return;binding=context.bindService(new Intent("android.bluetooth.IBluetoothHidHost").setClassName("com.android.bluetooth","com.android.bluetooth.hid.HidHostService"),connection,Context.BIND_AUTO_CREATE);AppLog.write("HID_BIND_REQUEST "+binding,null);}
  void start(){if(started)return;started=true;worker.start();h=new Handler(worker.getLooper());try{bind();}catch(Exception e){binding=false;AppLog.write("HID_BIND_ERROR",e);}h.post(tick);}
  void signal(){if(h==null||!started)return;h.post(()->{retry=0;nextAttempt=0;h.removeCallbacks(tick);h.post(tick);});}
- void stop(){started=false;connector.shutdownNow();if(h!=null)h.removeCallbacksAndMessages(null);if(binding)try{context.unbindService(connection);}catch(Exception ignored){}binding=false;binder=null;worker.quitSafely();}
+ void stop(){started=false;connector.shutdownNow();if(h!=null)h.removeCallbacksAndMessages(null);closeBatteryGatt(batteryGatt);synchronized(tones){for(android.media.ToneGenerator tone:tones)tone.release();tones.clear();}if(batteryVoice!=null)batteryVoice.close();if(RootHidProvider.hid==binder)RootHidProvider.hid=null;currentState=-1;batteryLevel=-1;if(binding)try{context.unbindService(connection);}catch(Exception ignored){}binding=false;binder=null;worker.quitSafely();}
  int call(int transaction,BluetoothDevice device)throws Exception{IBinder service=binder;if(service==null||!"android.bluetooth.IBluetoothHidHost".equals(service.getInterfaceDescriptor()))throw new IllegalStateException("HID interface unavailable");Parcel data=Parcel.obtain(),reply=Parcel.obtain();try{data.writeInterfaceToken("android.bluetooth.IBluetoothHidHost");data.writeInt(1);device.writeToParcel(data,0);if(!service.transact(transaction,data,reply,0))throw new IllegalStateException("Unsupported HID transaction");reply.readException();return reply.readInt();}finally{data.recycle();reply.recycle();}}
  // State notifications are independent of the potentially slow root reconnect command.
  void updateState(int state, String source) {
@@ -29,12 +37,18 @@ final class HidConnectionManager {
   if (previous != state) AppLog.write("HID_STATE " + previous + " -> " + state + " source=" + source, null);
   if (state == BluetoothProfile.STATE_CONNECTED) {
    if (!announcedConnected && previous >= 0) playTone(true);
+   if (!announcedConnected) awaitingConnectionBattery = true;
    announcedConnected = true;
    retry = 0;
    nextAttempt = 0;
    if (previous != state) batteryQueried = false;
   } else if (state == BluetoothProfile.STATE_DISCONNECTED) {
-   if (announcedConnected) playTone(false);
+   if (announcedConnected) {
+    playTone(false);
+    if (lastKnownBattery >= 0 && lastKnownBattery < 30) batteryWarning.run();
+   }
+   awaitingConnectionBattery = false;
+   closeBatteryGatt(batteryGatt);
    announcedConnected = false;
    batteryQueried = false;
    batteryLevel = -1;
@@ -48,19 +62,18 @@ final class HidConnectionManager {
   if (h == null || !started) return;
   h.post(() -> {
    if (!started) return;
+   boolean wasConnected = announcedConnected;
    if (BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(action)) {
     // Avoid immediately overwriting an ACL disconnect with cached HID state.
     disconnectedUntil = SystemClock.elapsedRealtime() + 3000;
     updateState(BluetoothProfile.STATE_DISCONNECTED, "acl");
-    retry = 0;
-    nextAttempt = SystemClock.elapsedRealtime() + 1000;
+    if (wasConnected) { retry = 0; nextAttempt = SystemClock.elapsedRealtime() + 1000; }
    } else if (ACTION_HID_STATE.equals(action) && state >= 0 && state <= 3) {
     disconnectedUntil = 0;
     updateState(state, "hid_broadcast");
     if (state == BluetoothProfile.STATE_DISCONNECTED) {
      disconnectedUntil = SystemClock.elapsedRealtime() + 3000;
-     retry = 0;
-     nextAttempt = SystemClock.elapsedRealtime() + 1000;
+     if (wasConnected) { retry = 0; nextAttempt = SystemClock.elapsedRealtime() + 1000; }
     }
    } else if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(action)) {
     disconnectedUntil = 0;
@@ -81,9 +94,10 @@ final class HidConnectionManager {
   connecting = true;
   final int attempt = retry++;
   nextAttempt = SystemClock.elapsedRealtime() + delays[attempt];
-  connector.execute(() -> {
+  try { connector.execute(() -> {
    java.lang.Process child = null;
    try {
+    if (!started || currentState != BluetoothProfile.STATE_DISCONNECTED) return;
     String apk = context.getApplicationInfo().sourceDir;
     if (apk.indexOf(39) >= 0) throw new IllegalStateException("Unexpected APK path");
     child = new ProcessBuilder("su", "-c", "CLASSPATH='" + apk + "' app_process /system/bin com.benbenyu.btquicklaunch.RootHidConnect").redirectErrorStream(true).start();
@@ -96,7 +110,9 @@ final class HidConnectionManager {
     if (child != null) child.destroy();
     connecting = false;
    }
-  });
+  }); } catch (java.util.concurrent.RejectedExecutionException stopped) {
+   connecting = false;
+  }
  }
  final Runnable tick = new Runnable() {
   public void run() {
@@ -122,54 +138,139 @@ final class HidConnectionManager {
    if (started) { h.removeCallbacks(this); h.postDelayed(this, 1000); }
   }
  };
- void playTone(boolean connected){
-  if(!context.getSharedPreferences("home",0).getBoolean("bt_connect_sound",true))return;
-  try{
-   android.media.ToneGenerator tg=new android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC,80);
-   int tone=connected?android.media.ToneGenerator.TONE_PROP_ACK:android.media.ToneGenerator.TONE_PROP_NACK;
-   tg.startTone(tone,connected?180:220);
-   AppLog.write("BT_HID_TONE connected="+connected,null);
-   if(h!=null)h.postDelayed(tg::release,500);
-  }catch(Exception e){AppLog.write("BT_HID_TONE_ERROR "+e.getClass().getSimpleName(),null);}
+ void playTone(boolean connected) {
+  notifyReminder(connected ? "reminder_keyboard_connected" : "reminder_keyboard_disconnected",
+      connected ? "keyboard-connected.wav" : "keyboard-disconnected.wav",
+      connected ? android.media.ToneGenerator.TONE_PROP_ACK : android.media.ToneGenerator.TONE_PROP_NACK);
  }
- void queryBattery(BluetoothDevice device){
-  batteryQueried=true;
-  try{
-   int sys=(Integer)BluetoothDevice.class.getMethod("getBatteryLevel").invoke(device);
-   if(sys>=0&&sys<=100){
-    batteryLevel=sys;
-    AppLog.write("BT_BATTERY source=system level="+sys,null);
-    Runnable cb=onStateChanged;if(cb!=null)cb.run();
+ boolean reminderEnabled(String key) {
+  android.content.SharedPreferences settings = context.getSharedPreferences("home", 0);
+  return settings.getBoolean("reminder_enabled", true) && settings.getBoolean(key, true);
+ }
+ void notifyReminder(String key, String asset, int tone) {
+  if (!started || !reminderEnabled(key)) return;
+  if (!ReminderAudio.ringing(context)) { ReminderAudio.vibrate(context); return; }
+  if ("voice".equals(context.getSharedPreferences("home", 0).getString("reminder_media", "voice"))) {
+   if (batteryVoice == null) batteryVoice = new OfflineVoiceAlerts(context, h);
+   batteryVoice.play(asset);
+  } else playNotificationTone(tone);
+ }
+ void playNotificationTone(int tone) {
+  android.media.ToneGenerator generated = null;
+  try {
+   generated = new android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 80);
+   final android.media.ToneGenerator sound = generated;
+   synchronized (tones) {
+    if (!started) { sound.release(); return; }
+    tones.add(sound);
+   }
+   sound.startTone(tone, 220);
+   AppLog.write("BT_HID_TONE type=" + tone, null);
+   h.postDelayed(() -> { synchronized (tones) { if (tones.remove(sound)) sound.release(); } }, 500);
+  } catch (Exception error) {
+   if (generated != null) synchronized (tones) { if (tones.remove(generated)) generated.release(); }
+   AppLog.write("REMINDER_TONE_FAILED", error);
+  }
+ }
+ void speakLowBattery() {
+  notifyReminder("reminder_keyboard_low", "keyboard-low-battery.wav", android.media.ToneGenerator.TONE_PROP_BEEP2);
+ }
+ void remindersChanged() {
+  if (h == null || !started) return;
+  h.post(() -> {
+   if (batteryVoice != null) { batteryVoice.close(); batteryVoice = null; }
+   synchronized (tones) { for (android.media.ToneGenerator tone : tones) tone.release(); tones.clear(); }
+  });
+ }
+ void onPhoneBattery(int level, boolean charging) {
+  if (h == null || !started || level < 0 || level > 100) return;
+  h.post(() -> {
+   if (!started) return;
+   android.content.SharedPreferences settings = context.getSharedPreferences("home", 0);
+   boolean warned = settings.getBoolean("phone_low_announced", false);
+   if (level >= 30) {
+    if (warned) settings.edit().putBoolean("phone_low_announced", false).apply();
+   } else if (!charging && !warned && reminderEnabled("reminder_phone_low")) {
+    settings.edit().putBoolean("phone_low_announced", true).apply();
+    phoneWarning.run();
+   }
+  });
+ }
+ void onBatteryLevel(int level, String source) {
+  if (h == null || !started) return;
+  h.post(() -> { if (started) updateBatteryLevel(level, source); });
+ }
+ void updateBatteryLevel(int level, String source) {
+  if (level < 0 || level > 100) return;
+  lastKnownBattery = level;
+  AppLog.write("BT_BATTERY source=" + source + " level=" + level, null);
+  if (currentState != BluetoothProfile.STATE_CONNECTED) return;
+  batteryLevel = level;
+  if (awaitingConnectionBattery) {
+   awaitingConnectionBattery = false;
+   if (level < 30) batteryWarning.run();
+  }
+  Runnable cb = onStateChanged;
+  if (cb != null) cb.run();
+ }
+ synchronized void closeBatteryGatt(BluetoothGatt expected) {
+  if (expected == null || expected != batteryGatt) return;
+  batteryGatt = null;
+  if (h != null) h.removeCallbacks(batteryTimeout);
+  expected.close();
+ }
+ void batteryCallback(BluetoothGatt gatt, Runnable action) {
+  if (!started || h == null) { gatt.close(); return; }
+  h.post(() -> {
+   if (!started || gatt != batteryGatt || currentState != BluetoothProfile.STATE_CONNECTED) {
+    closeBatteryGatt(gatt);
     return;
    }
-  }catch(Exception ignored){}
-  try{
-   device.connectGatt(context,false,new BluetoothGattCallback(){
-    public void onConnectionStateChange(BluetoothGatt gatt,int status,int newState){
-     if(status==BluetoothGatt.GATT_SUCCESS&&newState==BluetoothProfile.STATE_CONNECTED){if(!gatt.discoverServices())gatt.close();}
-     else if(newState==BluetoothProfile.STATE_DISCONNECTED||status!=BluetoothGatt.GATT_SUCCESS){gatt.close();}
+   action.run();
+  });
+ }
+ synchronized void queryBattery(BluetoothDevice device) {
+  if (!started || batteryGatt != null) return;
+  batteryQueried = true;
+  try {
+   int level = (Integer) BluetoothDevice.class.getMethod("getBatteryLevel").invoke(device);
+   if (level >= 0 && level <= 100) { updateBatteryLevel(level, "system"); return; }
+  } catch (Exception ignored) {}
+  try {
+   batteryGatt = device.connectGatt(context, false, new BluetoothGattCallback() {
+    public void onConnectionStateChange(BluetoothGatt gatt, int status, int state) {
+     batteryCallback(gatt, () -> {
+      if (status == BluetoothGatt.GATT_SUCCESS && state == BluetoothProfile.STATE_CONNECTED) {
+       if (!gatt.discoverServices()) closeBatteryGatt(gatt);
+      } else if (state == BluetoothProfile.STATE_DISCONNECTED || status != BluetoothGatt.GATT_SUCCESS)
+       closeBatteryGatt(gatt);
+     });
     }
-    public void onServicesDiscovered(BluetoothGatt gatt,int status){
-     if(status==BluetoothGatt.GATT_SUCCESS){
-      BluetoothGattService svc=gatt.getService(UUID_BATTERY_SERVICE);
-      BluetoothGattCharacteristic ch=svc!=null?svc.getCharacteristic(UUID_BATTERY_LEVEL):null;
-      if(ch!=null&&gatt.readCharacteristic(ch))return;
-     }
-     AppLog.write("BT_BATTERY source=gatt unavailable",null);
-     gatt.close();
-    }
-    public void onCharacteristicRead(BluetoothGatt gatt,BluetoothGattCharacteristic ch,int status){
-     if(status==BluetoothGatt.GATT_SUCCESS&&UUID_BATTERY_LEVEL.equals(ch.getUuid())){
-      Integer v=ch.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8,0);
-      if(v!=null&&v>=0&&v<=100){
-       batteryLevel=v;
-       AppLog.write("BT_BATTERY source=gatt level="+v,null);
-       Runnable cb=onStateChanged;if(cb!=null)cb.run();
+    public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+     batteryCallback(gatt, () -> {
+      if (status == BluetoothGatt.GATT_SUCCESS) {
+       BluetoothGattService service = gatt.getService(UUID_BATTERY_SERVICE);
+       BluetoothGattCharacteristic ch = service == null ? null : service.getCharacteristic(UUID_BATTERY_LEVEL);
+       if (ch != null && gatt.readCharacteristic(ch)) return;
       }
-     }
-     gatt.close();
+      AppLog.write("BT_BATTERY source=gatt unavailable", null);
+      closeBatteryGatt(gatt);
+     });
     }
-   },BluetoothDevice.TRANSPORT_LE);
-  }catch(Exception e){AppLog.write("BT_BATTERY_ERROR",e);}
+    public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic ch, int status) {
+     batteryCallback(gatt, () -> {
+      if (status == BluetoothGatt.GATT_SUCCESS && UUID_BATTERY_LEVEL.equals(ch.getUuid())) {
+       Integer level = ch.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, 0);
+       if (level != null) updateBatteryLevel(level, "gatt");
+      }
+      closeBatteryGatt(gatt);
+     });
+    }
+   }, BluetoothDevice.TRANSPORT_LE);
+   if (batteryGatt != null) h.postDelayed(batteryTimeout, 10000);
+  } catch (Exception e) {
+   closeBatteryGatt(batteryGatt);
+   AppLog.write("BT_BATTERY_ERROR", e);
+  }
  }
 }

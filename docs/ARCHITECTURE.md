@@ -13,6 +13,7 @@ All code lives in `launcher-app/src/com/benbenyu/btquicklaunch`.
 | `NetIndicators` / `StatusGlyph` | Wi-Fi / mobile / battery / Bluetooth status icons |
 | `ConfigBackup` | ZIP config export / import with typed validation and limits |
 | `AppLog` / `HomeApplication` | Daily logs, 14-day cleanup, crash and previous exit reasons |
+| `OfflineVoiceAlerts` | Bounded offline audio queue, connection-event priority, playback timeout and lifecycle cleanup |
 | `DeviceConfig` | Device-specific constants (keyboard address) |
 
 `phone-config/92-btquicklaunch.sh` is a Magisk `service.d` script that restores the default home, battery whitelist and accessibility service at boot.

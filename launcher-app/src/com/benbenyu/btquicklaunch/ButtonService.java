@@ -38,7 +38,7 @@ public class ButtonService extends AccessibilityService {
     if (bluetoothEvents == null) {
       bluetoothEvents =
           new android.content.BroadcastReceiver() {
-            public void onReceive(android.content.Context c, Intent in) {android.bluetooth.BluetoothDevice device=in.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE);if(device!=null&&!DeviceConfig.KEYBOARD_MAC.equals(device.getAddress()))return;String act=in.getAction();if("android.bluetooth.device.action.BATTERY_LEVEL_CHANGED".equals(act)){int lvl=in.getIntExtra("android.bluetooth.device.extra.BATTERY_LEVEL",-1);if(lvl>=0&&lvl<=100){HidConnectionManager.batteryLevel=lvl;AppLog.write("BT_BATTERY source=broadcast level="+lvl,null);Runnable cb=HidConnectionManager.onStateChanged;if(cb!=null)cb.run();}return;}if(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(act))onInterrupt();
+            public void onReceive(android.content.Context c, Intent in) {android.bluetooth.BluetoothDevice device=in.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE);if(device!=null&&!DeviceConfig.KEYBOARD_MAC.equals(device.getAddress()))return;String act=in.getAction();if(Intent.ACTION_BATTERY_CHANGED.equals(act)){handlePhoneBattery(in);return;}if(android.media.AudioManager.RINGER_MODE_CHANGED_ACTION.equals(act)){if(hid!=null&&!ReminderAudio.ringing(ButtonService.this))hid.remindersChanged();return;}if("android.bluetooth.device.action.BATTERY_LEVEL_CHANGED".equals(act)){int lvl=in.getIntExtra("android.bluetooth.device.extra.BATTERY_LEVEL",-1);if(lvl>=0&&lvl<=100){if(hid!=null)hid.onBatteryLevel(lvl,"broadcast");}return;}if(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(act))onInterrupt();
               if (hid != null && (device != null || android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED.equals(act))) {
                 hid.onBluetoothEvent(act, in.getIntExtra(
                     HidConnectionManager.ACTION_HID_STATE.equals(act)
@@ -49,7 +49,9 @@ public class ButtonService extends AccessibilityService {
                   "BT_EVENT "
                       + in.getAction()
                       + " state="
-                      + in.getIntExtra(android.bluetooth.BluetoothAdapter.EXTRA_STATE, -1),
+                      + in.getIntExtra(HidConnectionManager.ACTION_HID_STATE.equals(act)
+                          ? android.bluetooth.BluetoothProfile.EXTRA_STATE
+                          : android.bluetooth.BluetoothAdapter.EXTRA_STATE, -1),
                   null);
               try {
                 new java.io.File(getFilesDir(), "hid-wake").createNewFile();
@@ -64,9 +66,32 @@ public class ButtonService extends AccessibilityService {
       filter.addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED);
       filter.addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED);
       filter.addAction(HidConnectionManager.ACTION_HID_STATE);
+      filter.addAction(Intent.ACTION_BATTERY_CHANGED);
+      filter.addAction(android.media.AudioManager.RINGER_MODE_CHANGED_ACTION);
       filter.addAction("android.bluetooth.device.action.BATTERY_LEVEL_CHANGED");
       registerReceiver(bluetoothEvents, filter);
     }
+  }
+
+  static void remindersChanged() {
+    ButtonService service = instance;
+    if (service != null && service.hid != null) service.hid.remindersChanged();
+  }
+
+  static void refreshPhoneBattery() {
+    ButtonService service = instance;
+    if (service != null) service.handler.post(() -> {
+      Intent battery = service.registerReceiver(null, new android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+      if (battery != null) service.handlePhoneBattery(battery);
+    });
+  }
+
+  void handlePhoneBattery(Intent battery) {
+    int level = battery.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
+    int scale = battery.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100);
+    if (hid != null && level >= 0 && scale > 0 && level <= scale)
+      hid.onPhoneBattery((int) (level * 100L / scale),
+          battery.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0);
   }
 
   public void onDestroy() {

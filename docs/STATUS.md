@@ -1,6 +1,6 @@
 # Project status
 
-Version 1.2.1, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+Version 1.3.0, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
 
 ## Verified on device
 - Build, signing, install over existing version
@@ -10,11 +10,20 @@ Version 1.2.1, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (
 - Crash capture and previous-exit-reason logging
 - Root HID bridge connection accepted by the system
 
-## v1.2.1 validation
-- APK build and v2/v3 signature verification passed.
-- Device-side HidStateChecks passed for initial attachment, intermediate states, and HID/ACL broadcasts.
+## v1.3.0 validation
+- APK build and v2/v3 signature verification passed; update installed on the target device.
+- Device-side HidStateChecks cover initial attachment, intermediate states, HID/ACL broadcasts, exhausted retry budgets, low-battery boundaries and shutdown cleanup.
 - An ACL disconnect was processed in approximately 1 ms while the reconnect executor was blocked; this measures software event handling, not keyboard power-off detection.
 - End-to-end notification within 3–5 seconds of physical keyboard power-off remains unverified and depends on the Bluetooth stack detecting link loss.
+
+- ReminderChecks passed phone threshold/charging rules, deduplication, master and individual switches, audio parsing and queue cleanup.
+- VoiceInstrumentation played all four bundled clips to completion inside the target app process.
+- Config backup round-trip passed with proxy app lists and all reminder settings; malformed settings remain rejected.
+- v1.3.0 adds four bundled offline voice clips, default-on voice reminders with tone selection, individual switches and an adaptive launcher icon.
+- Physical keyboard cycling confirmed audible reminders after enabling ring mode; speech uses media audio with an explicit ring-mode gate and vibration fallback.
+- Latest device log: controller disconnect reason 8 (connection timeout), ACL broadcast at 23:26:36.101 and speech start at 23:26:36.511 (410 ms application response). Physical power-off to notification still takes about 10 seconds on this keyboard.
+- Magisk watchdog now matches a real ServiceRecord rather than stale ConnectionRecord text; test teardown must confirm the accessibility service is bound.
+- Long-run playback and battery drain still require manual validation.
 
 ## Not yet fully verified
 - Multi-hour stability, battery and heat; Bluetooth drop statistics

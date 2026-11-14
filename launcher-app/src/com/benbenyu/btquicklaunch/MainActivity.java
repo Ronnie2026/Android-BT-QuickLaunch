@@ -794,17 +794,43 @@ public class MainActivity extends Activity {
     body.addView(imeCard);
     body.addView(IosUi.footer(this, "禁用输入法有助于提高按钮模拟点击的成功率，避免输入法弹出遮挡语音按钮。", paper));
 
-    body.addView(IosUi.header(this, "蓝牙键盘", paper));
-    LinearLayout btCard = IosUi.card(this, paper);
-    btCard.addView(
-        IosUi.switchRow(
-            this,
-            "蓝牙键盘HID 断开与连接提示音",
-            p.getBoolean("bt_connect_sound", true),
-            paper,
-            null,
-            (v, on) -> p.edit().putBoolean("bt_connect_sound", on).apply()));
-    body.addView(btCard);
+    body.addView(IosUi.header(this, "语音提醒功能", paper));
+    body.addView(IosUi.footer(this, "语音播报需要开启手机响铃模式。静音／振动时仅震动，请先检查手机响铃开关。", paper));
+    LinearLayout reminderCard = IosUi.card(this, paper);
+    reminderCard.addView(IosUi.switchRow(this, "开启提醒", p.getBoolean("reminder_enabled", true), paper, null,
+        (v, on) -> {
+          p.edit().putBoolean("reminder_enabled", on).apply();
+          ButtonService.remindersChanged();
+          if (on) ButtonService.refreshPhoneBattery();
+        }));
+    reminderCard.addView(IosUi.divider(this, paper));
+    LinearLayout mediaRow = IosUi.disclosureRow(this, "提醒媒体类型",
+        "tone".equals(p.getString("reminder_media", "voice")) ? "提示音" : "提示语音", paper, false, () -> {});
+    mediaRow.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("提醒媒体类型")
+        .setSingleChoiceItems(new String[] {"提示音", "提示语音"},
+            "tone".equals(p.getString("reminder_media", "voice")) ? 0 : 1,
+            (dialog, selected) -> {
+              p.edit().putString("reminder_media", selected == 0 ? "tone" : "voice").apply();
+              ButtonService.remindersChanged();
+              ((TextView) mediaRow.getChildAt(1)).setText(selected == 0 ? "提示音" : "提示语音");
+              dialog.dismiss();
+            }).setNegativeButton("取消", null).show());
+    reminderCard.addView(mediaRow);
+    String[] reminderNames = {"键盘断开", "键盘已连接", "键盘电量过低", "手机电量过低"};
+    String[] reminderKeys = {"reminder_keyboard_disconnected", "reminder_keyboard_connected",
+        "reminder_keyboard_low", "reminder_phone_low"};
+    for (int item = 0; item < reminderKeys.length; item++) {
+      final String key = reminderKeys[item];
+      reminderCard.addView(IosUi.divider(this, paper));
+      reminderCard.addView(IosUi.switchRow(this, reminderNames[item], p.getBoolean(key, true), paper, null,
+          (v, on) -> {
+            p.edit().putBoolean(key, on).apply();
+            ButtonService.remindersChanged();
+            if (on && key.equals("reminder_phone_low")) ButtonService.refreshPhoneBattery();
+          }));
+    }
+    body.addView(reminderCard);
+    body.addView(IosUi.footer(this, "请开启手机响铃模式：只有响铃模式才播放提示语音／提示音；静音或振动模式下仅震动。默认开启提示语音，全部离线播放，音量跟随媒体音量。低电量阈值为低于 30%；键盘连接读取电量后及断开时提醒，手机每轮低电量提醒一次，充电时不提醒。", paper));
 
     body.addView(IosUi.header(this, "网络与 VPN 代理", paper));
     LinearLayout netCard = IosUi.card(this, paper);
@@ -898,7 +924,7 @@ public class MainActivity extends Activity {
                     94)));
     body.addView(sysCard);
 
-    TextView ver = IosUi.footer(this, "BT QuickLaunch 1.2.1 · 双击 1 / 2 / 3 启动 · 三键清理", paper);
+    TextView ver = IosUi.footer(this, "BT QuickLaunch 1.3.0 · 双击 1 / 2 / 3 启动 · 三键清理", paper);
     ver.setGravity(Gravity.CENTER);
     ver.setPadding(0, dp(18), 0, dp(8));
     body.addView(ver);

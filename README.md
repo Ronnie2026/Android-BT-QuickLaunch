@@ -17,9 +17,12 @@ The phone runs this launcher as its default home screen. A paired Bluetooth keyp
 - ChatGPT / Gemini voice launch with local network and VPN/proxy checks; starts Clash Meta and re-checks when needed (no external connectivity probes)
 - Background app indicator, battery / Wi-Fi / mobile / Bluetooth status icons (including BLE keyboard battery level when reported via GATT)
 - Color and e-paper style themes, custom wallpapers and icons
+- Adaptive launcher icon with a car/Bluetooth mark
 - Idle dimming after 2 minutes to reduce OLED burn-in
 - Fast HID reconnect on disconnect (3 retries, then passive wait during keyboard sleep)
 - Keyboard connection/disconnection sounds follow HID/ACL broadcasts, with 1-second polling as fallback; root reconnect runs separately. Sudden power-off detection still depends on the Bluetooth stack timeout.
+- Reminder audio requires ring mode; silent/vibrate modes use vibration only. Enable ring mode and check media volume to hear speech.
+- Offline reminders for keyboard connected/disconnected, keyboard battery below 30% at connection/disconnection, and phone battery below 30% while not charging. Settings provide a master switch, individual switches and tone/voice selection; enabled with voice by default.
 - Config export / import (ZIP), daily log export, crash logging, and one-tap entry to the classic system launcher in Settings
 
 ## Requirements and limitations
@@ -47,7 +50,7 @@ Output: `dist/BT-QuickLaunch-v<version>.apk`. A local signing key is generated i
 ## Install
 
 ```bash
-adb install -r dist/BT-QuickLaunch-v1.2.1.apk
+adb install -r dist/BT-QuickLaunch-v1.3.0.apk
 adb shell cmd package set-home-activity com.benbenyu.btquicklaunch/.MainActivity
 ```
 

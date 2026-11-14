@@ -14,7 +14,7 @@ public class HomeApplication extends android.app.Application {
             System.exit(10);
           }
         });
-    AppLog.write("APP_START version=1.2.1", null);
+    AppLog.write("APP_START version=1.3.0", null);
     try {
       getPackageManager().getApplicationInfo("com.larus.nova", 0);
       android.content.SharedPreferences slots = getSharedPreferences("home", 0);
