@@ -6,8 +6,8 @@ All code lives in `launcher-app/src/com/benbenyu/btquicklaunch`.
 |---|---|
 | `MainActivity` | Landscape home screen, four app slots, ordering, wallpaper, themes, brightness, settings |
 | `ButtonService` | Accessibility key filter for the configured keyboard; double-press, three-key chord, voice button detection |
-| `NetworkCheck` | Parallel HTTPS probes for Google / ChatGPT with bounded wait |
-| `HidConnectionManager` | Queries HID state and requests reconnect of a bonded keyboard with backoff |
+| `ProxyGuard` | Local network, VPN interface, Clash process and loopback-port checks; no external probes |
+| `HidConnectionManager` | Handles HID/ACL broadcasts and notification sounds, polls state every second, and reconnects on a separate executor |
 | `RootHidProvider` / `RootHidConnect` | Restricted root bridge that performs the HID connect; provider is not exported and checks caller UID |
 | `IdlePower` | Dims the home window after 2 minutes idle; resets on touch, HID, media playback |
 | `NetIndicators` / `StatusGlyph` | Wi-Fi / mobile / battery / Bluetooth status icons |

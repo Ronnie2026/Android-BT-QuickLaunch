@@ -14,11 +14,12 @@
 
 - 固定横屏桌面，四个可配置应用位，长按可交换位置
 - 蓝牙按键：双击 1/2/3 打开前三个位置；三键同按清理后台并回到桌面
-- ChatGPT 专用流程：检测 Google/ChatGPT 连通性，必要时启动 Clash 并复检，再进入语音模式
+- ChatGPT / Gemini 语音启动：检查本地网络与 VPN／代理状态，必要时启动 Clash Meta 并复检（不发起外网连通性探测）
 - 后台应用指示、电量 / Wi-Fi / 移动网络 / 蓝牙状态图标（支持通过 GATT 读取并显示蓝牙键盘电量）
 - 彩色与电子书风格主题，自定义壁纸和图标
 - 2 分钟空闲自动调暗，降低 OLED 烧屏风险
 - 断联后快速回连已配对键盘（快速重试 3 次，休眠期被动等待唤醒以免撞车）
+- 键盘连接／断开提示音优先响应 HID／ACL 广播，并以 1 秒轮询兜底；Root 回连独立执行。键盘突然断电后的失联确认仍受系统蓝牙超时影响。
 - 配置导入导出（ZIP）、日志导出、崩溃记录，以及在设置中临时进入系统经典桌面
 
 ## 环境与限制
@@ -46,7 +47,7 @@
 ## 安装
 
 ```bash
-adb install -r dist/BT-QuickLaunch-v1.1.0.apk
+adb install -r dist/BT-QuickLaunch-v1.2.1.apk
 adb shell cmd package set-home-activity com.benbenyu.btquicklaunch/.MainActivity
 ```
 

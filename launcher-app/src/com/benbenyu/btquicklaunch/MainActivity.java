@@ -898,7 +898,7 @@ public class MainActivity extends Activity {
                     94)));
     body.addView(sysCard);
 
-    TextView ver = IosUi.footer(this, "BT QuickLaunch 1.2.0 · 双击 1 / 2 / 3 启动 · 三键清理", paper);
+    TextView ver = IosUi.footer(this, "BT QuickLaunch 1.2.1 · 双击 1 / 2 / 3 启动 · 三键清理", paper);
     ver.setGravity(Gravity.CENTER);
     ver.setPadding(0, dp(18), 0, dp(8));
     body.addView(ver);
