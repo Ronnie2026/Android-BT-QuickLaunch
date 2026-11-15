@@ -1,6 +1,6 @@
 # Project status
 
-Version 1.5.0, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+Version 1.6.0, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
 
 ## Verified on device
 - Build, signing, install over existing version
@@ -9,6 +9,15 @@ Version 1.5.0, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (
 - Config export / import round trip, invalid file rejected, size limit
 - Crash capture and previous-exit-reason logging
 - Root HID bridge connection accepted by the system
+
+## v1.6.0 validation
+- Added per-event editors with matching production definitions, saved summaries, draft preview, Save and Cancel.
+- Orange active-state rings are attached to app icon views and matched by package, replacing layout-sensitive underlines.
+- ReminderEventChecks cover independent event choices, actual asset associations, legacy shared choices and master-switch behavior.
+- Backup checks include per-event media and tone fields.
+- ProcessStateChecks, ReminderEventChecks, DeviceChecks, ReminderChecks and HidStateChecks passed on device.
+- Actual UI draft preview played the chosen tone; Cancel left the existing disconnection setting unchanged.
+- Device screenshots confirmed an orange ring on background Doubao and no ring after successful cleanup.
 
 ## v1.5.0 validation
 - Eight AOSP OGG sounds are bundled in the APK; runtime playback uses only these assets, with no MediaStore or external file dependency.

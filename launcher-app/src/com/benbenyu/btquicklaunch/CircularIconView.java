@@ -11,6 +11,34 @@ import android.widget.ImageView;
 
 /** A consistent circular display mask; source icons and imported image files stay unchanged. */
 final class CircularIconView extends ImageView {
+  boolean appRunning, stateKnown = true;
+  final android.graphics.Paint statePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+  android.animation.ValueAnimator pulse;
+  float ringAlpha = 1f;
+
+  void stopPulse() {
+    if (pulse != null) { pulse.cancel(); pulse = null; }
+    ringAlpha = 1f;
+    invalidate();
+  }
+
+  void setAppState(boolean running, boolean known, boolean breathe) {
+    appRunning = running;
+    stateKnown = known;
+    if (!running || !known || !breathe) stopPulse();
+    else if (pulse == null) {
+      pulse = android.animation.ValueAnimator.ofFloat(.75f, 1f);
+      pulse.setDuration(1800);
+      pulse.setRepeatCount(-1);
+      pulse.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+      pulse.addUpdateListener(a -> { ringAlpha = (Float) a.getAnimatedValue(); invalidate(); });
+      pulse.start();
+    }
+    invalidate();
+  }
+
+  protected void onDetachedFromWindow() { stopPulse(); super.onDetachedFromWindow(); }
+
   CircularIconView(Context context) {
     super(context);
     setBackgroundColor(0xfff7f7f7);
@@ -47,6 +75,14 @@ final class CircularIconView extends ImageView {
     } finally {
       icon.setBounds(bounds);
       canvas.restoreToCount(saved);
+    }
+    if (appRunning || !stateKnown) {
+      float stroke = 4f * getResources().getDisplayMetrics().density;
+      statePaint.setStyle(android.graphics.Paint.Style.STROKE);
+      statePaint.setStrokeWidth(stroke);
+      statePaint.setColor(stateKnown ? 0xffffa340 : 0xff8a939f);
+      statePaint.setAlpha((int)(255 * ringAlpha));
+      canvas.drawCircle(getWidth()/2f, getHeight()/2f, size/2f - stroke/2f - 1, statePaint);
     }
   }
 }

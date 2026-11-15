@@ -19,6 +19,8 @@ The phone runs this launcher as its default home screen. A paired Bluetooth keyp
 - Doubao automatically clicks its phone control after launch, using accessibility nodes in its portrait interface. Account quota limits still apply.
 - Background app indicator, battery / Wi-Fi / mobile / Bluetooth status icons (including BLE keyboard battery level when reported via GATT)
 - Color and e-paper style themes, custom wallpapers and icons
+- Reminder settings are organized by event: each event shows its saved voice or tone, with selection and draft preview in one dialog. Cancel keeps the saved setting; legacy shared choices remain defaults until overridden.
+- An orange ring around an app icon indicates its background process is running. State follows the package when slots are reordered; cleanup requests an immediate refresh.
 - Eight bundled Android AOSP notification sounds support selection and preview for general tone reminders and cleanup success independently; offline app assets only, with no external imports or device media-provider dependency.
 - App icons use a uniform circular display mask, including custom icons; original image files stay unchanged.
 - Adaptive launcher icon with a car/Bluetooth mark
@@ -54,7 +56,7 @@ Output: `dist/BT-QuickLaunch-v<version>.apk`. A local signing key is generated i
 ## Install
 
 ```bash
-adb install -r dist/BT-QuickLaunch-v1.5.0.apk
+adb install -r dist/BT-QuickLaunch-v1.6.0.apk
 adb shell cmd package set-home-activity com.benbenyu.btquicklaunch/.MainActivity
 ```
 

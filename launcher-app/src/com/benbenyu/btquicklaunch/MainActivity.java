@@ -13,16 +13,18 @@ import java.util.*;
 public class MainActivity extends Activity {
   FrameLayout desktopRoot, cleanFeedback;
   SystemTonePlayer cleanTone, tonePreview;
+  OfflineVoiceAlerts voicePreview;
   final Handler feedbackHandler = new Handler();
   IdlePower idlePower;
   NetIndicators networkIndicators;
-  View[] activityDots = new View[4];
+  CircularIconView[] activityIcons = new CircularIconView[4];
   Handler statusHandler = new Handler();
-  boolean desktopVisible = false, statusChecking = false;
+  boolean desktopVisible = false, statusChecking = false, statusRefreshRequested = false;
   final Runnable statusTick = () -> refreshProcesses();
 
   void refreshProcesses() {
-    if (!desktopVisible || statusChecking) return;
+    if (!desktopVisible) return;
+    if (statusChecking) { statusRefreshRequested = true; return; }
     statusChecking = true;
     String[] packages = new String[4];
     for (int i = 0; i < 4; i++) packages[i] = get(i, "pkg", pkgs[i]);
@@ -52,7 +54,7 @@ public class MainActivity extends Activity {
                 reader.start();
                 if (proc.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) {
                   reader.join(500);
-                  valid = proc.exitValue() == 0;
+                  valid = proc.exitValue() == 0 && !reader.isAlive();
                 } else proc.destroy();
               } catch (Exception ignored) {
               }
@@ -64,45 +66,27 @@ public class MainActivity extends Activity {
                     for (int i = 0; i < 4; i++) {
                       if (!packages[i].equals(get(i, "pkg", pkgs[i]))) continue;
                       boolean active = false;
-                      if (ok)
-                        for (String name : running)
-                          if (name.equals(packages[i]) || name.startsWith(packages[i] + ":")) {
-                            active = true;
-                            break;
-                          }
-                      if (activityDots[i] != null) {
-                        if (active
-                            && p.getBoolean("breathing", true)
-                            && activityDots[i].getAnimation() == null) {
-                          android.view.animation.AlphaAnimation pulse =
-                              new android.view.animation.AlphaAnimation(0.35f, 0.8f);
-                          pulse.setDuration(2200);
-                          pulse.setRepeatCount(-1);
-                          pulse.setRepeatMode(android.view.animation.Animation.REVERSE);
-                          pulse.setInterpolator(
-                              new android.view.animation.AccelerateDecelerateInterpolator());
-                          activityDots[i].startAnimation(pulse);
-                        } else if (!active || !p.getBoolean("breathing", true)) {
-                          activityDots[i].clearAnimation();
-                        }
-                        if (!ok) {
-                          activityDots[i].clearAnimation();
-                          activityDots[i].setAlpha(0.35f);
-                          activityDots[i].setBackgroundColor(0xff8a939f);
-                          activityDots[i].setVisibility(View.VISIBLE);
-                        } else {
-                          activityDots[i].setAlpha(1f);
-                          activityDots[i].setBackgroundColor(0xffffa340);
-                          activityDots[i].setVisibility(active ? View.VISIBLE : View.INVISIBLE);
-                        }
-                        activityDots[i].setContentDescription(
-                            !ok ? "后台状态检测失败" : active ? "应用后台进程运行中" : "应用未运行");
+                      if (ok) active = processActive(running, packages[i]);
+                      if (activityIcons[i] != null) {
+                        activityIcons[i].setAppState(active, ok, p.getBoolean("breathing", true));
+                        activityIcons[i].setContentDescription(get(i, "name", names[i]) + "，"
+                            + (!ok ? "后台状态检测失败" : active ? "后台运行中" : "未运行"));
                       }
                     }
-                    statusHandler.postDelayed(statusTick, idlePower!=null&&idlePower.dimmed?30000:5000);
+                    long delay = statusRefreshRequested ? 0 : idlePower!=null&&idlePower.dimmed ? 30000 : 5000;
+                    statusRefreshRequested = false;
+                    statusHandler.removeCallbacks(statusTick);
+                    statusHandler.postDelayed(statusTick, delay);
                   });
             })
         .start();
+  }
+
+  static boolean processActive(Set<String> processes, String pkg) {
+    if (pkg == null || pkg.isEmpty()) return false;
+    for (String process : processes)
+      if (process.equals(pkg) || process.startsWith(pkg + ":")) return true;
+    return false;
   }
 
   String packagesIndex(String[] a, int i) {
@@ -192,7 +176,7 @@ public class MainActivity extends Activity {
     if(idlePower!=null)idlePower.stop();
     if (networkIndicators != null) networkIndicators.stop();
     desktopVisible = false;
-    for (View bar : activityDots) if (bar != null) bar.clearAnimation();
+    for (CircularIconView icon : activityIcons) if (icon != null) icon.stopPulse();
     statusHandler.removeCallbacks(statusTick);
     if (batteryRegistered) {
       unregisterReceiver(batteryReceiver);
@@ -280,6 +264,7 @@ public class MainActivity extends Activity {
   public boolean dispatchTouchEvent(android.view.MotionEvent e){if(e.getActionMasked()==android.view.MotionEvent.ACTION_DOWN&&idlePower!=null)idlePower.activity("touch");return super.dispatchTouchEvent(e);}
   void draw() {
     clearCleanFeedback();
+    for (CircularIconView icon : activityIcons) if (icon != null) icon.stopPulse();
     if (networkIndicators != null) networkIndicators.stop();
     FrameLayout root = new FrameLayout(this);
     desktopRoot = root;
@@ -314,30 +299,7 @@ public class MainActivity extends Activity {
       FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(-1, -1, Gravity.CENTER);
       ip.setMargins(dp(18), dp(30), dp(18), dp(30));
       cell.addView(icon, ip);
-      if (i < 4) {
-        View dot = new View(this);
-        GradientDrawable dotBg = new GradientDrawable();
-        dotBg.setCornerRadius(dp(2));
-        dotBg.setColor(0xffffa340);
-        dot.setBackground(dotBg);
-        dot.setVisibility(View.INVISIBLE);
-        FrameLayout.LayoutParams dotPos =
-            new FrameLayout.LayoutParams(dp(48), dp(3), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        dotPos.bottomMargin = dp(14);
-        cell.addView(dot, dotPos);
-        icon.addOnLayoutChangeListener(
-            (v, l, t, r, b, ol, ot, orr, ob) -> {
-              android.graphics.drawable.Drawable image = icon.getDrawable();
-              if (image != null
-                  && image.getIntrinsicWidth() > 0
-                  && image.getIntrinsicHeight() > 0) {
-                float bottom = icon.getTop()
-                    + (icon.getHeight() + Math.min(icon.getWidth(), icon.getHeight())) / 2f;
-                dot.setY(Math.min(cell.getHeight() - dp(8), bottom + dp(10)));
-              }
-            });
-        activityDots[i] = dot;
-      }
+      if (i < 4) activityIcons[i] = (CircularIconView) icon;
       cell.setOnLongClickListener(
           v -> {
             if (n < 4) reorder(n);
@@ -391,6 +353,7 @@ public class MainActivity extends Activity {
     updateBluetooth();
     View idleShade=new View(this);idleShade.setBackgroundColor(Color.BLACK);idleShade.setAlpha(0f);idleShade.setClickable(false);root.addView(idleShade,new FrameLayout.LayoutParams(-1,-1));if(idlePower==null)idlePower=new IdlePower(this);idlePower.attach(idleShade);
     gear.setOnClickListener(v -> settingsPanel());
+    if (desktopVisible) { statusHandler.removeCallbacks(statusTick); statusHandler.post(statusTick); }
     if (p.getBoolean("paper_theme", false)) {
       android.graphics.ColorMatrix gray = new android.graphics.ColorMatrix();
       gray.setSaturation(0);
@@ -725,7 +688,7 @@ public class MainActivity extends Activity {
     appCard.addView(
         IosUi.switchRow(
             this,
-            "后台横线呼吸动画",
+            "后台活跃图标呼吸动画",
             p.getBoolean("breathing", true),
             paper,
             null,
@@ -772,7 +735,7 @@ public class MainActivity extends Activity {
         });
     appCard.addView(brightRow);
     body.addView(appCard);
-    body.addView(IosUi.footer(this, "底部横线状态：橙色表示运行中，灰色表示检测失败，无横线表示未运行。", paper));
+    body.addView(IosUi.footer(this, "图标橙色圆环表示应用后台运行中；灰色圆环表示检测失败；没有圆环表示未运行。状态按应用包名匹配，交换位置后仍会跟随应用。", paper));
 
     body.addView(IosUi.header(this, "输入法与语音", paper));
     LinearLayout imeCard = IosUi.card(this, paper);
@@ -800,55 +763,29 @@ public class MainActivity extends Activity {
     body.addView(imeCard);
     body.addView(IosUi.footer(this, "禁用输入法有助于提高按钮模拟点击的成功率，避免输入法弹出遮挡语音按钮。", paper));
 
-    body.addView(IosUi.header(this, "清理后台反馈", paper));
-    LinearLayout cleanCard = IosUi.card(this, paper);
-    cleanCard.addView(IosUi.switchRow(this, "清理后台成功提示音", p.getBoolean("clean_success_sound", true), paper, null,
-        (v, on) -> {
-          p.edit().putBoolean("clean_success_sound", on).apply();
-          if (!on) releaseCleanTone();
-        }));
-    addToneRows(cleanCard, "clean_success_tone", paper);
-    body.addView(cleanCard);
-    body.addView(IosUi.footer(this, "成功后显示派大星和“搞定了”，提示音使用系统短音。关闭提示音仍显示图片；静音／振动模式仅震动。", paper));
-
-    body.addView(IosUi.header(this, "语音提醒功能", paper));
-    body.addView(IosUi.footer(this, "语音播报需要开启手机响铃模式。静音／振动时仅震动，请先检查手机响铃开关。", paper));
+    body.addView(IosUi.header(this, "事件提醒", paper));
+    body.addView(IosUi.footer(this, "先选择事件，再设置声音。每个事件独立选择；试听的是当前窗口的选择，点保存后才生效。", paper));
     LinearLayout reminderCard = IosUi.card(this, paper);
-    reminderCard.addView(IosUi.switchRow(this, "开启提醒", p.getBoolean("reminder_enabled", true), paper, null,
+    final java.util.Map<ReminderEvent, TextView> summaries = new java.util.HashMap<>();
+    reminderCard.addView(IosUi.switchRow(this, "蓝牙与电量提醒总开关", p.getBoolean("reminder_enabled", true), paper, null,
         (v, on) -> {
           p.edit().putBoolean("reminder_enabled", on).apply();
+          stopTonePreview();
           ButtonService.remindersChanged();
+          for (ReminderEvent event : summaries.keySet()) summaries.get(event).setText(event.summary(p));
           if (on) ButtonService.refreshPhoneBattery();
         }));
-    reminderCard.addView(IosUi.divider(this, paper));
-    LinearLayout mediaRow = IosUi.disclosureRow(this, "提醒媒体类型",
-        "tone".equals(p.getString("reminder_media", "voice")) ? "提示音" : "提示语音", paper, false, () -> {});
-    mediaRow.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("提醒媒体类型")
-        .setSingleChoiceItems(new String[] {"提示音", "提示语音"},
-            "tone".equals(p.getString("reminder_media", "voice")) ? 0 : 1,
-            (dialog, selected) -> {
-              p.edit().putString("reminder_media", selected == 0 ? "tone" : "voice").apply();
-              ButtonService.remindersChanged();
-              ((TextView) mediaRow.getChildAt(1)).setText(selected == 0 ? "提示音" : "提示语音");
-              dialog.dismiss();
-            }).setNegativeButton("取消", null).show());
-    reminderCard.addView(mediaRow);
-    addToneRows(reminderCard, "reminder_tone", paper);
-    String[] reminderNames = {"键盘断开", "键盘已连接", "键盘电量过低", "手机电量过低"};
-    String[] reminderKeys = {"reminder_keyboard_disconnected", "reminder_keyboard_connected",
-        "reminder_keyboard_low", "reminder_phone_low"};
-    for (int item = 0; item < reminderKeys.length; item++) {
-      final String key = reminderKeys[item];
+    for (ReminderEvent event : ReminderEvent.ALL) {
       reminderCard.addView(IosUi.divider(this, paper));
-      reminderCard.addView(IosUi.switchRow(this, reminderNames[item], p.getBoolean(key, true), paper, null,
-          (v, on) -> {
-            p.edit().putBoolean(key, on).apply();
-            ButtonService.remindersChanged();
-            if (on && key.equals("reminder_phone_low")) ButtonService.refreshPhoneBattery();
-          }));
+      LinearLayout eventRow = IosUi.disclosureRow(this, event.title, event.summary(p), paper, false, () -> {});
+      TextView value = (TextView) eventRow.getChildAt(1);
+      value.setMaxLines(2);
+      summaries.put(event, value);
+      eventRow.setOnClickListener(v -> configureReminder(event, value));
+      reminderCard.addView(eventRow);
     }
     body.addView(reminderCard);
-    body.addView(IosUi.footer(this, "请开启手机响铃模式：只有响铃模式才播放提示语音／提示音；静音或振动模式下仅震动。默认开启提示语音，全部离线播放，语音跟随媒体音量，提示音跟随系统通知音量。低电量阈值为低于 30%；键盘连接读取电量后及断开时提醒，手机每轮低电量提醒一次，充电时不提醒。", paper));
+    body.addView(IosUi.footer(this, "请开启响铃模式；静音／振动时仅震动。语音使用媒体音量，提示音使用通知音量。清理成功提示音独立于总开关，关闭声音仍显示派大星。电量低于 30% 时提醒，手机充电时不提醒。", paper));
 
     body.addView(IosUi.header(this, "网络与 VPN 代理", paper));
     LinearLayout netCard = IosUi.card(this, paper);
@@ -956,13 +893,14 @@ public class MainActivity extends Activity {
             .setNegativeButton("关闭", null).show()));
     body.addView(sysCard);
 
-    TextView ver = IosUi.footer(this, "BT QuickLaunch 1.5.0 · 双击 1 / 2 / 3 启动 · 三键清理", paper);
+    TextView ver = IosUi.footer(this, "BT QuickLaunch 1.6.0 · 双击 1 / 2 / 3 启动 · 三键清理", paper);
     ver.setGravity(Gravity.CENTER);
     ver.setPadding(0, dp(18), 0, dp(8));
     body.addView(ver);
   }
 
   void stopTonePreview() {
+    if (voicePreview != null) { voicePreview.close(); voicePreview = null; }
     if (tonePreview != null) { tonePreview.close(); tonePreview = null; }
   }
 
@@ -972,45 +910,91 @@ public class MainActivity extends Activity {
     if (!ReminderAudio.ringing(this)) Toast.makeText(this, "当前静音／振动模式，试听仅震动；请开启响铃模式", 1).show();
   }
 
-  void addToneRows(LinearLayout card, String key, boolean paper) {
-    card.addView(IosUi.divider(this, paper));
-    LinearLayout row = IosUi.disclosureRow(this, "选择内置系统音效",
-        SystemTonePlayer.title(this, p.getString(key, "")), paper, false, () -> {});
-    row.setOnClickListener(v -> chooseSystemTone(key, (TextView) row.getChildAt(1)));
-    card.addView(row);
-    card.addView(IosUi.divider(this, paper));
-    card.addView(IosUi.disclosureRow(this, "试听已选提示音", "应用内置系统音效", paper, false,
-        () -> previewTone(p.getString(key, ""))));
-  }
-
-  void chooseSystemTone(String key, TextView value) {
+  void configureReminder(ReminderEvent event, TextView summary) {
     stopTonePreview();
-    new Thread(() -> {
-      java.util.List<SystemTonePlayer.Entry> tones = SystemTonePlayer.list(this);
-      runOnUiThread(() -> {
-        if (isDestroyed() || isFinishing() || !desktopVisible) return;
-        String[] labels = new String[tones.size()];
-        int current = 0;
-        String selectedId = p.getString(key, "");
-        for (int i = 0; i < tones.size(); i++) {
-          labels[i] = tones.get(i).title;
-          if (tones.get(i).id.equals(selectedId)) current = i;
-        }
-        final int[] selected = {current};
-        AlertDialog picker = new AlertDialog.Builder(this).setTitle("选择内置系统音效（不支持外部导入）")
-            .setSingleChoiceItems(labels, current, (d, which) -> selected[0] = which)
-            .setPositiveButton("保存", (d, which) -> {
-              SystemTonePlayer.Entry tone = tones.get(selected[0]);
-              p.edit().putString(key, tone.id).apply();
-              value.setText(tone.title);
-              if (key.equals("reminder_tone")) ButtonService.remindersChanged();
-            }).setNeutralButton("试听", null).setNegativeButton("取消", null).create();
-        picker.setOnDismissListener(d -> stopTonePreview());
-        picker.setOnShowListener(d -> picker.getButton(AlertDialog.BUTTON_NEUTRAL)
-            .setOnClickListener(v -> previewTone(tones.get(selected[0]).id)));
-        picker.show();
-      });
-    }, "SystemToneList").start();
+    LinearLayout panel = new LinearLayout(this);
+    panel.setOrientation(LinearLayout.VERTICAL);
+    panel.setPadding(dp(24), dp(8), dp(24), dp(8));
+    TextView description = new TextView(this);
+    description.setText(event == ReminderEvent.CLEAN ? "清理命令全部成功后触发。声音关闭时仍显示派大星和“搞定了”。"
+        : "此设置只对应“" + event.title + "”事件，不影响其他事件。");
+    if (event != ReminderEvent.CLEAN && !p.getBoolean("reminder_enabled", true))
+      description.append("\n注意：总开关当前关闭，保存后仍需打开总开关才会实际提醒。");
+    description.setTextSize(15);
+    panel.addView(description);
+    RadioGroup modes = new RadioGroup(this);
+    modes.setOrientation(LinearLayout.HORIZONTAL);
+    String[] choices = event == ReminderEvent.CLEAN ? new String[] {"关闭提示音", "内置提示音"}
+        : new String[] {"关闭", "语音播报", "内置提示音"};
+    for (int i = 0; i < choices.length; i++) {
+      RadioButton radio = new RadioButton(this);
+      radio.setId(100 + i);
+      radio.setText(choices[i]);
+      modes.addView(radio, new RadioGroup.LayoutParams(0, -2, 1));
+    }
+    int initial = !p.getBoolean(event.key, true) ? 0 : event == ReminderEvent.CLEAN ? 1
+        : event.media(p).equals("voice") ? 1 : 2;
+    modes.check(100 + initial);
+    panel.addView(modes);
+    TextView speech = new TextView(this);
+    speech.setText("将播报：" + (event.speech == null ? "" : event.speech));
+    speech.setTextSize(17);
+    speech.setPadding(0, dp(12), 0, dp(12));
+    panel.addView(speech);
+    java.util.List<SystemTonePlayer.Entry> tones = SystemTonePlayer.list(this);
+    String[] titles = new String[tones.size()];
+    int selected = 0;
+    for (int i = 0; i < tones.size(); i++) {
+      titles[i] = tones.get(i).title;
+      if (tones.get(i).id.equals(event.tone(p))) selected = i;
+    }
+    Spinner sound = new Spinner(this);
+    sound.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, titles));
+    sound.setSelection(selected);
+    panel.addView(sound, new LinearLayout.LayoutParams(-1, dp(48)));
+    Button preview = new Button(this);
+    preview.setText("试听当前选择");
+    panel.addView(preview);
+    Runnable update = () -> {
+      int mode = modes.getCheckedRadioButtonId() - 100;
+      boolean voice = event != ReminderEvent.CLEAN && mode == 1;
+      speech.setVisibility(voice ? View.VISIBLE : View.GONE);
+      sound.setVisibility(mode > 0 && !voice ? View.VISIBLE : View.GONE);
+      preview.setEnabled(mode > 0);
+    };
+    modes.setOnCheckedChangeListener((group, id) -> { stopTonePreview(); update.run(); });
+    sound.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+      public void onItemSelected(android.widget.AdapterView<?> parent, View v, int position, long id) { stopTonePreview(); }
+      public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+    });
+    preview.setOnClickListener(v -> {
+      stopTonePreview();
+      int mode = modes.getCheckedRadioButtonId() - 100;
+      if (event != ReminderEvent.CLEAN && mode == 1) {
+        voicePreview = new OfflineVoiceAlerts(this, new Handler());
+        voicePreview.play(event.asset);
+        if (!ReminderAudio.ringing(this)) Toast.makeText(this, "当前为静音／振动模式，仅震动", 0).show();
+      } else previewTone(tones.get(sound.getSelectedItemPosition()).id);
+    });
+    update.run();
+    ScrollView scroll = new ScrollView(this);
+    scroll.addView(panel);
+    AlertDialog dialog = new AlertDialog.Builder(this).setTitle(event.title + " · 提醒设置")
+        .setView(scroll).setPositiveButton("保存", (d, which) -> {
+          int mode = modes.getCheckedRadioButtonId() - 100;
+          android.content.SharedPreferences.Editor editor = p.edit().putBoolean(event.key, mode > 0);
+          if (mode > 0) {
+            if (event != ReminderEvent.CLEAN) editor.putString(event.mediaKey(), mode == 1 ? "voice" : "tone");
+            editor.putString(event.toneKey(), tones.get(sound.getSelectedItemPosition()).id);
+          }
+          editor.apply();
+          summary.setText(event.summary(p));
+          ButtonService.remindersChanged();
+          if (event == ReminderEvent.CLEAN) releaseCleanTone();
+          if (event == ReminderEvent.PHONE_LOW && mode > 0) ButtonService.refreshPhoneBattery();
+        }).setNegativeButton("取消", null).create();
+    dialog.setOnDismissListener(d -> stopTonePreview());
+    dialog.show();
   }
 
   void openCreditLink(String url) {
@@ -1557,10 +1541,10 @@ public class MainActivity extends Activity {
   }
 
   void playCleanSuccessTone() {
-    if (!p.getBoolean("clean_success_sound", true)) return;
+    if (!ReminderEvent.CLEAN.enabled(p)) return;
     if (!ReminderAudio.ringing(this)) { ReminderAudio.vibrate(this); return; }
     if (cleanTone == null) cleanTone = new SystemTonePlayer(this, feedbackHandler);
-    cleanTone.play(p.getString("clean_success_tone", ""), android.media.ToneGenerator.TONE_PROP_ACK);
+    cleanTone.play(ReminderEvent.CLEAN.tone(p), android.media.ToneGenerator.TONE_PROP_ACK);
     AppLog.write("CLEAN_SUCCESS_TONE requested", null);
   }
 
@@ -1629,7 +1613,11 @@ public class MainActivity extends Activity {
                 AppLog.write("CLEAN_RESULT exit=" + result, null);
                 runOnUiThread(() -> {
                   if (isDestroyed() || isFinishing()) return;
-                  if (result == 0) showCleanFeedback();
+                  if (result == 0) {
+                    statusHandler.removeCallbacks(statusTick);
+                    statusHandler.post(statusTick);
+                    showCleanFeedback();
+                  }
                   else Toast.makeText(this, "清理失败，请检查 Root 授权", 1).show();
                 });
               } catch (Exception e) {

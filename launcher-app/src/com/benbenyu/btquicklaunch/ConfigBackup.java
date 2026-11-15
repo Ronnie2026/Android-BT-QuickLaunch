@@ -72,7 +72,7 @@ final class ConfigBackup {
     while (keys.hasNext()) {
       String key = keys.next();
       if (!key.matches(
-          "[0-3](name|pkg|before|delay|voice|icon)|background|wallpaper|brightness|breathing|paper_theme|idle_power|proxy_guard|proxy_on_boot|proxy_apps|disable_ime|bt_connect_sound|reminder_enabled|reminder_media|reminder_keyboard_connected|reminder_keyboard_disconnected|reminder_keyboard_low|reminder_phone_low|clean_success_sound|clean_success_tone|reminder_tone"))
+          "[0-3](name|pkg|before|delay|voice|icon)|background|wallpaper|brightness|breathing|paper_theme|idle_power|proxy_guard|proxy_on_boot|proxy_apps|disable_ime|bt_connect_sound|reminder_enabled|reminder_media|reminder_keyboard_connected|reminder_keyboard_disconnected|reminder_keyboard_low|reminder_phone_low|clean_success_sound|clean_success_tone|reminder_tone|reminder_(keyboard_(connected|disconnected|low)|phone_low)_(media|tone)"))
         continue;
       Object value = j.get(key);
       boolean boolKey =
@@ -82,9 +82,9 @@ final class ConfigBackup {
       if (boolKey && !(value instanceof Boolean)
           || intKey && !(value instanceof Integer)
           || (!boolKey && !intKey && !(value instanceof String))) throw new IOException("配置字段类型无效");
-      if ((key.equals("reminder_tone") || key.equals("clean_success_tone"))
+      if (key.endsWith("_tone")
           && !SystemTonePlayer.allowed(value.toString())) throw new IOException("Only bundled system tones are supported");
-      if (key.equals("reminder_media") && !value.equals("voice") && !value.equals("tone"))
+      if (key.endsWith("_media") && !value.equals("voice") && !value.equals("tone"))
         throw new IOException("Invalid reminder media");
       if (key.equals("background") && ((Integer) value < 0 || (Integer) value > 8)
           || key.equals("brightness") && ((Integer) value < 0 || (Integer) value > 100)

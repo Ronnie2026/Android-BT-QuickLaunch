@@ -145,17 +145,19 @@ final class HidConnectionManager {
  }
  boolean reminderEnabled(String key) {
   android.content.SharedPreferences settings = context.getSharedPreferences("home", 0);
-  return settings.getBoolean("reminder_enabled", true) && settings.getBoolean(key, true);
+  return ReminderEvent.find(key).enabled(settings);
  }
  void notifyReminder(String key, String asset, int tone) {
   if (!started || !reminderEnabled(key)) return;
+  ReminderEvent event = ReminderEvent.find(key);
+  android.content.SharedPreferences settings = context.getSharedPreferences("home", 0);
   if (!ReminderAudio.ringing(context)) { ReminderAudio.vibrate(context); return; }
-  if ("voice".equals(context.getSharedPreferences("home", 0).getString("reminder_media", "voice"))) {
+  if ("voice".equals(event.media(settings))) {
    if (batteryVoice == null) batteryVoice = new OfflineVoiceAlerts(context, h);
-   batteryVoice.play(asset);
+   batteryVoice.play(event.asset);
   } else {
    if (systemTone == null) systemTone = new SystemTonePlayer(context, h);
-   systemTone.play(context.getSharedPreferences("home", 0).getString("reminder_tone", ""), tone);
+   systemTone.play(event.tone(settings), tone);
   }
  }
  void speakLowBattery() {
