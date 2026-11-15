@@ -2,7 +2,14 @@
 
 [English (default)](STATUS.md)
 
-版本 1.7.0，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+版本 1.7.5，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+
+## v1.7.5 封版说明
+
+- 在 **通用设置 -> 软件更新** 中新增应用内自动更新（`AppUpdater.java` + `UpdateApkProvider.java`），默认从 **GitHub Releases**（`Ronnie2026/Android-BT-QuickLaunch`）检测并下载安装包，支持手动切换更新源，失败时不自动切源。
+- 启动自动检查延迟 6 秒在后台线程执行（每 6 小时最多一次），不影响冷/热启动速度。
+- 下载完成后先通过 `PackageManager.getPackageArchiveInfo` 校验安装包有效性再拉起系统安装器；检测或下载失败时明确提示并支持一键打开 GitHub Releases 页面手动下载。
+- 修复 `HidConnectionManager` 低电量语音滞回防重与 `su` 输出重定向，补充 `MainActivity` 后台回调生命周期保护，并修复浅色电子书主题下的文字对比度。
 
 ## v1.7.0 验证
 

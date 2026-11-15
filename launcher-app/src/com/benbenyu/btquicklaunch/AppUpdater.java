@@ -88,7 +88,8 @@ public class AppUpdater {
   }
 
   static void autoCheckIfDue(Activity act, SharedPreferences p) {
-    if (act == null || p == null || !p.getBoolean(PREF_AUTO_CHECK, true)) return;
+    if (act == null || act.isDestroyed() || act.isFinishing() || p == null) return;
+    if (!p.getBoolean(PREF_AUTO_CHECK, true)) return;
     long now = System.currentTimeMillis();
     long last = p.getLong(PREF_LAST_CHECK, 0L);
     if (now - last < AUTO_CHECK_INTERVAL_MS) return;
@@ -137,15 +138,29 @@ public class AppUpdater {
                     if (cancelled.get()) return;
                     if (err != null || found == null) {
                       if (!silent) {
+                        boolean isGitee = sourceMode(p) == SOURCE_GITEE;
+                        String pageUrl =
+                            isGitee
+                                ? "https://gitee.com/" + giteeRepo(p) + "/releases"
+                                : GITHUB_RELEASES_PAGE;
                         new AlertDialog.Builder(act)
                             .setTitle("检查更新失败")
                             .setMessage(
                                 "无法从 "
-                                    + (sourceMode(p) == SOURCE_GITEE ? "Gitee" : "GitHub")
+                                    + (isGitee ? "Gitee" : "GitHub")
                                     + " 获取最新版本：\n"
                                     + (err != null ? err : "未知错误")
-                                    + "\n\n请检查网络连接或 VPN 代理配置。")
+                                    + "\n\n请检查网络连接或 VPN 代理配置，也可前往 Release 页面手动下载。")
                             .setPositiveButton("知道了", null)
+                            .setNeutralButton(
+                                "打开 Release 页面",
+                                (d, w) -> {
+                                  try {
+                                    act.startActivity(
+                                        new Intent(Intent.ACTION_VIEW, Uri.parse(pageUrl)));
+                                  } catch (Exception ignored) {
+                                  }
+                                })
                             .show();
                       }
                       return;
@@ -281,10 +296,7 @@ public class AppUpdater {
       ProgressBar bar,
       TextView status)
       throws Exception {
-    String downloadUrl =
-        "GitHub".equals(release.source)
-            ? applyMirror(release.apkUrl, p.getString(PREF_MIRROR, ""))
-            : release.apkUrl;
+    String downloadUrl = release.apkUrl;
     File target = UpdateApkProvider.apkFile(act);
     File parent = target.getParentFile();
     if (parent != null) parent.mkdirs();

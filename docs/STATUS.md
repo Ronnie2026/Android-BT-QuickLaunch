@@ -2,7 +2,13 @@
 
 [简体中文](STATUS.zh-CN.md)
 
-Version 1.7.0, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+Version 1.7.5, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+
+## v1.7.5 release summary
+- Added in-app auto-update (`AppUpdater.java` + `UpdateApkProvider.java`) in **General Settings -> Software Update**, defaulting to **GitHub Releases** (`Ronnie2026/Android-BT-QuickLaunch`) with manual source selection (no automatic fallback on failure).
+- Startup auto-check is deferred by 6 seconds on a background thread (at most once every 6 hours) so app launch speed is unaffected.
+- Downloaded APKs are verified via `PackageManager.getPackageArchiveInfo` before launching the system package installer, and failures guide the user to the GitHub Releases page with a one-tap link.
+- Hardened `HidConnectionManager` low-battery hysteresis and `su` output redirection, added lifecycle guards to `MainActivity` background UI callbacks, and fixed light e-book theme text contrast.
 
 ## v1.7.0 validation
 - Bundled static XML wallpapers default to black; system image selection remains available. Corrected the gallery tile index that previously opened the picker for Graphite.
