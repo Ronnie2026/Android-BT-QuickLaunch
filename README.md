@@ -14,6 +14,12 @@ Old Android phones are cheap, capable and usually sit in a drawer. This project 
 
 The phone runs this launcher as its default home screen. A paired Bluetooth keypad then opens the right app with one press: an AI voice assistant, a navigation app, a music app and so on, with no menus in between.
 
+## Screenshots
+
+| Home Launcher | App Slots Settings | General Settings |
+| :---: | :---: | :---: |
+| ![Home Launcher](docs/images/home.png) | ![App Slots Settings](docs/images/settings-apps.png) | ![General Settings](docs/images/settings-general.png) |
+
 ## Features
 
 - Fixed landscape home screen with four configurable app slots; long-press to swap slots

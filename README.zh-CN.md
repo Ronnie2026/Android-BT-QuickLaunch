@@ -14,6 +14,12 @@ English search terms: second-hand Android phone, spare smartphone, phone reuse, 
 
 手机把本程序设为默认桌面，配对的蓝牙小键盘一键即可打开对应应用：AI 语音助手、导航、音乐等，中间没有任何菜单。
 
+## 界面截图
+
+| 桌面主界面 | 启动应用设置 | 通用设置 |
+| :---: | :---: | :---: |
+| ![桌面主界面](docs/images/home.png) | ![启动应用设置](docs/images/settings-apps.png) | ![通用设置](docs/images/settings-general.png) |
+
 ## 功能
 
 - 固定横屏桌面，四个可配置应用位，长按可交换位置
