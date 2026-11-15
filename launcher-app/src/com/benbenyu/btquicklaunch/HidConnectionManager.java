@@ -10,7 +10,7 @@ final class HidConnectionManager {
  static final String ACTION_HID_STATE = "android.bluetooth.input.profile.action.CONNECTION_STATE_CHANGED";
  final java.util.concurrent.ExecutorService connector = java.util.concurrent.Executors.newSingleThreadExecutor();
  volatile boolean connecting;
- boolean batteryQueried, announcedConnected, awaitingConnectionBattery;
+ boolean batteryQueried, announcedConnected, awaitingConnectionBattery, keyboardLowAnnounced;
  int lastKnownBattery = -1;
  volatile BluetoothGatt batteryGatt;
  OfflineVoiceAlerts batteryVoice;
@@ -45,7 +45,7 @@ final class HidConnectionManager {
   } else if (state == BluetoothProfile.STATE_DISCONNECTED) {
    if (announcedConnected) {
     playTone(false);
-    if (lastKnownBattery >= 0 && lastKnownBattery < 30) batteryWarning.run();
+    maybeWarnKeyboardLow();
    }
    awaitingConnectionBattery = false;
    closeBatteryGatt(batteryGatt);
@@ -100,7 +100,7 @@ final class HidConnectionManager {
     if (!started || currentState != BluetoothProfile.STATE_DISCONNECTED) return;
     String apk = context.getApplicationInfo().sourceDir;
     if (apk.indexOf(39) >= 0) throw new IllegalStateException("Unexpected APK path");
-    child = new ProcessBuilder("su", "-c", "CLASSPATH='" + apk + "' app_process /system/bin com.benbenyu.btquicklaunch.RootHidConnect").redirectErrorStream(true).start();
+    child = new ProcessBuilder("su", "-c", "CLASSPATH='" + apk + "' app_process /system/bin com.benbenyu.btquicklaunch.RootHidConnect").redirectErrorStream(true).redirectOutput(new java.io.File("/dev/null")).start();
     if (!child.waitFor(8, java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("Root HID timeout");
     AppLog.write("HID_RETRY result=" + (child.exitValue() == 0 ? 1 : 0) + " retry=" + attempt, null);
     if (attempt == delays.length - 1) AppLog.write("HID_SLEEP_WAIT", null);
@@ -188,15 +188,23 @@ final class HidConnectionManager {
   if (h == null || !started) return;
   h.post(() -> { if (started) updateBatteryLevel(level, source); });
  }
+ void maybeWarnKeyboardLow() {
+  if (lastKnownBattery >= 30) { keyboardLowAnnounced = false; return; }
+  if (lastKnownBattery >= 0 && !keyboardLowAnnounced) {
+   keyboardLowAnnounced = true;
+   batteryWarning.run();
+  }
+ }
  void updateBatteryLevel(int level, String source) {
   if (level < 0 || level > 100) return;
   lastKnownBattery = level;
+  if (level >= 30) keyboardLowAnnounced = false;
   AppLog.write("BT_BATTERY source=" + source + " level=" + level, null);
   if (currentState != BluetoothProfile.STATE_CONNECTED) return;
   batteryLevel = level;
   if (awaitingConnectionBattery) {
    awaitingConnectionBattery = false;
-   if (level < 30) batteryWarning.run();
+   maybeWarnKeyboardLow();
   }
   Runnable cb = onStateChanged;
   if (cb != null) cb.run();

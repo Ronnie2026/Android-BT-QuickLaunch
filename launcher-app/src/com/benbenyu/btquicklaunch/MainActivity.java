@@ -1236,7 +1236,9 @@ public class MainActivity extends Activity {
     new Thread(
             () -> {
               ProxyGuard.Status s = ProxyGuard.check(this);
-              runOnUiThread(() -> out.setText(s.summary()));
+              runOnUiThread(() -> {
+                if (!isDestroyed() && !isFinishing()) out.setText(s.summary());
+              });
             })
         .start();
   }
@@ -1252,38 +1254,50 @@ public class MainActivity extends Activity {
 
   void configure(int i) {
     detailPage("位置 " + (i + 1) + " · 启动设置");
+    boolean paper = lightPaper();
     option("更换目标应用", () -> pick(i, false));
     String slotPkg = get(i, "pkg", pkgs[i]);
     boolean gpt = slotPkg.equals("com.openai.chatgpt");
-    Switch proxy = new Switch(this);
-    proxy.setText("启动前检测 VPN，未开启则自动启用 Clash Meta");
-    proxy.setTextColor(Color.WHITE);
-    proxy.setChecked(ProxyGuard.shouldGuard(p, slotPkg));
-    settingsContent.addView(proxy);
-    proxy.setOnCheckedChangeListener(
-        (v, on) -> {
-          ProxyGuard.setGuarded(p, slotPkg, on);
-          draw();
-        });
-    if (!p.getBoolean("proxy_guard", true))
-      settingsContent.addView(text("提示：“其他设置 → 网络与代理”总开关已关闭，此项暂不生效。", 13));
-    if (gpt) {
-      settingsContent.addView(text("GPT 特殊规则：先检查设备联网与 VPN；未开启则启动 Clash 并复检；复检失败不会强行进入通话。", 14));
-    }
+    LinearLayout card = IosUi.card(this, paper);
+    card.addView(
+        IosUi.switchRow(
+            this,
+            "启动前检测 VPN，未开启则自动启用 Clash Meta",
+            ProxyGuard.shouldGuard(p, slotPkg),
+            paper,
+            null,
+            (v, on) -> {
+              ProxyGuard.setGuarded(p, slotPkg, on);
+              draw();
+            }));
     if (supportsVoice(slotPkg)) {
-      Switch voice = new Switch(this);
-      voice.setText(gpt ? "自动进入语音通话" : "com.larus.nova".equals(slotPkg)
-          ? "打开豆包后自动点击右上角电话，进入通话模式"
-          : "自动进入 Gemini Live 语音（会先收起键盘）");
-      voice.setTextColor(Color.WHITE);
-      voice.setChecked(p.getBoolean(i + "voice", true));
-      settingsContent.addView(voice);
-      voice.setOnCheckedChangeListener(
-          (v, on) -> {
-            p.edit().putBoolean(i + "voice", on).apply();
-            draw();
-          });
+      card.addView(IosUi.divider(this, paper));
+      String voiceTitle =
+          gpt
+              ? "自动进入语音通话"
+              : "com.larus.nova".equals(slotPkg)
+                  ? "打开豆包后自动点击右上角电话，进入通话模式"
+                  : "自动进入 Gemini Live 语音（会先收起键盘）";
+      card.addView(
+          IosUi.switchRow(
+              this,
+              voiceTitle,
+              p.getBoolean(i + "voice", true),
+              paper,
+              null,
+              (v, on) -> {
+                p.edit().putBoolean(i + "voice", on).apply();
+                draw();
+              }));
     }
+    LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(-1, -2);
+    cardLp.setMargins(dp(4), dp(8), dp(4), dp(4));
+    settingsContent.addView(card, cardLp);
+    if (!p.getBoolean("proxy_guard", true))
+      settingsContent.addView(IosUi.footer(this, "提示：“通用设置 → 网络与 VPN 代理”总开关已关闭，此项暂不生效。", paper));
+    if (gpt)
+      settingsContent.addView(
+          IosUi.footer(this, "GPT 特殊规则：先检查设备联网与 VPN；未开启则启动 Clash 并复检；复检失败不会强行进入通话。", paper));
     if (!gpt) {
       option("设置前置应用", () -> pick(i, true));
       option(
@@ -1626,14 +1640,18 @@ public class MainActivity extends Activity {
                   else Toast.makeText(this, "清理失败，请检查 Root 授权", 1).show();
                 });
               } catch (Exception e) {
-                AppLog.write("CLEAN_FAILED",e);runOnUiThread(() -> Toast.makeText(this, "清理失败，请查看日志或 Root 授权", 1).show());
+                AppLog.write("CLEAN_FAILED", e);
+                runOnUiThread(() -> {
+                  if (!isDestroyed() && !isFinishing())
+                    Toast.makeText(this, "清理失败，请查看日志或 Root 授权", 1).show();
+                });
               } finally {
                 runOnUiThread(
                     () -> {
                       cleaning = false;
                       int next = queuedSlot;
                       queuedSlot = -1;
-                      if (next >= 0) launch(next);
+                      if (next >= 0 && !isDestroyed() && !isFinishing()) launch(next);
                     });
               }
             })
@@ -1649,7 +1667,7 @@ public class MainActivity extends Activity {
     settingsContent.addView(title);
     EditText search = new EditText(this);
     search.setSingleLine();
-    search.setTextColor(Color.WHITE);
+    search.setTextColor(IosUi.textPrimary(lightPaper()));
     search.setHintTextColor(0xff919cab);
     search.setHint("搜索应用");
     settingsContent.addView(search);
