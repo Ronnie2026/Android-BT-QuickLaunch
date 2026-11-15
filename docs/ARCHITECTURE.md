@@ -12,10 +12,18 @@ All code lives in `launcher-app/src/com/benbenyu/btquicklaunch`.
 | `HidConnectionManager` | Handles HID/ACL broadcasts and notification sounds, polls state every second, and reconnects on a separate executor |
 | `RootHidProvider` / `RootHidConnect` | Restricted root bridge that performs the HID connect; provider is not exported and checks caller UID |
 | `IdlePower` | Dims the home window after 2 minutes idle; resets on touch, HID, media playback |
+| `ImeGuard` | Disables/restores system soft keyboards so IME popups do not block voice controls |
+| `IosUi` | iOS-style grouped cards, switches, disclosure rows, dividers, and footers for Settings |
+| `CircularIconView` | Uniform circular display mask for home and settings app icons |
+| `MemoryIndicator` | Top-right whole-device RAM usage chip icon and percentage indicator |
+| `NightWallpaper` | Bundled static XML dark and e-book wallpapers |
 | `NetIndicators` / `StatusGlyph` | Wi-Fi / mobile / battery / Bluetooth status icons |
+| `ReminderEvent` / `ReminderAudio` | Per-event reminder definitions, sound/voice routing, and summary formatting |
+| `SystemTonePlayer` | Bundled AOSP OGG playback and draft preview inside Settings |
 | `ConfigBackup` | ZIP config export / import with typed validation and limits |
 | `AppLog` / `HomeApplication` | Daily logs, 14-day cleanup, crash and previous exit reasons |
 | `OfflineVoiceAlerts` | Bounded offline audio queue, connection-event priority, playback timeout and lifecycle cleanup |
+| `AppUpdater` / `UpdateApkProvider` | In-app GitHub Releases update check, APK download verification, and scoped `content://` installer bridge |
 | `DeviceConfig` | Device-specific constants (keyboard address) |
 
 `phone-config/92-btquicklaunch.sh` is a Magisk `service.d` script that restores the default home, battery whitelist and accessibility service at boot.

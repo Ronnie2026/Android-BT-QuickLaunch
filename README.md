@@ -45,6 +45,7 @@ The phone runs this launcher as its default home screen. A paired Bluetooth keyp
 - Reminder audio requires ring mode; silent/vibrate modes use vibration only. Enable ring mode and check media volume to hear speech.
 - Offline reminders for keyboard connected/disconnected, keyboard battery below 30% at connection/disconnection, and phone battery below 30% while not charging. Settings provide a master switch, individual switches and tone/voice selection; enabled with voice by default.
 - Config export / import (ZIP), daily log export, crash logging, and one-tap entry to the classic system launcher in Settings
+- In-app auto-update in Settings (`GitHub Releases` by default, deferred 6s background check so startup speed is unaffected, APK package verification before install, and one-tap link to Releases on failure)
 
 ## Requirements and limitations
 
@@ -71,7 +72,7 @@ Output: `dist/BT-QuickLaunch-v<version>.apk`. A local signing key is generated i
 ## Install
 
 ```bash
-adb install -r dist/BT-QuickLaunch-v1.7.0.apk
+adb install -r dist/BT-QuickLaunch-v1.7.5.apk
 adb shell cmd package set-home-activity com.benbenyu.btquicklaunch/.MainActivity
 ```
 
@@ -95,7 +96,8 @@ Before development, read [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTI
 | `launcher-app/` | Android app sources, manifest, resources, device checks |
 | `phone-config/` | Magisk boot script and device QA scripts |
 | `build-home.ps1` | Build and sign script |
-| `docs/` | Architecture and project status |
+| `release.ps1` | Automated GitHub Release publisher (with optional `-IncludeGitee`) |
+| `docs/` | Architecture, project status, and README screenshots (`docs/images/`) |
 | `CONTRIBUTING.md` | Contribution rules (READMEs must stay in sync) |
 
 ## License

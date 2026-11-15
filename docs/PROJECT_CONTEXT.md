@@ -2,7 +2,7 @@
 
 [简体中文](PROJECT_CONTEXT.zh-CN.md)
 
-Implementation baseline: v1.7.0. This document describes the shipped code, not a promise about future third-party app versions.
+Implementation baseline: v1.7.5. This document describes the shipped code, not a promise about future third-party app versions.
 
 ## Purpose and operating environment
 

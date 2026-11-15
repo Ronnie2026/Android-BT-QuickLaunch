@@ -45,6 +45,7 @@ English search terms: second-hand Android phone, spare smartphone, phone reuse, 
 - 语音／提示音需要开启手机响铃模式；静音或振动模式仅震动。听不到语音时，请先开启响铃并检查媒体音量。
 - 离线提醒：键盘连接／断开、连接或断开时键盘电量低于 30%、未充电时手机电量低于 30%。设置提供总开关、四项独立开关和“提示音／提示语音”选择，默认全部开启并使用提示语音。
 - 配置导入导出（ZIP）、日志导出、崩溃记录，以及在设置中临时进入系统经典桌面
+- 设置页应用内自动升级（默认使用 GitHub Releases，启动后延迟 6 秒后台检查以免影响启动速度，安装前校验 APK 包名完整性，失败时引导并支持一键打开 Release 页面）
 
 ## 环境与限制
 
@@ -71,7 +72,7 @@ English search terms: second-hand Android phone, spare smartphone, phone reuse, 
 ## 安装
 
 ```bash
-adb install -r dist/BT-QuickLaunch-v1.7.0.apk
+adb install -r dist/BT-QuickLaunch-v1.7.5.apk
 adb shell cmd package set-home-activity com.benbenyu.btquicklaunch/.MainActivity
 ```
 
@@ -95,7 +96,8 @@ adb shell cmd package set-home-activity com.benbenyu.btquicklaunch/.MainActivity
 | `launcher-app/` | Android 应用源码、Manifest、资源、设备检查 |
 | `phone-config/` | Magisk 开机脚本、设备测试脚本 |
 | `build-home.ps1` | 构建与签名脚本 |
-| `docs/` | 架构与项目状态 |
+| `release.ps1` | GitHub Releases 自动发布脚本（可选 `-IncludeGitee`） |
+| `docs/` | 架构、项目状态与 README 截图（`docs/images/`） |
 | `CONTRIBUTING.md` | 贡献规则（中英文 README 必须同步） |
 
 ## 许可证
