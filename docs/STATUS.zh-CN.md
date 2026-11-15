@@ -2,7 +2,11 @@
 
 [English (default)](STATUS.md)
 
-版本 1.7.6，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+版本 1.7.7，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+
+## v1.7.7 更新说明
+
+- 将清理成功后的派大星“搞定了”提示层停留时间从 3 秒（+200ms 淡出）缩短为 700 毫秒快速闪现（+150ms 淡出），配合提示音即时反馈、不遮挡后续操作。
 
 ## v1.7.6 更新说明
 

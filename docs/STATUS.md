@@ -2,7 +2,10 @@
 
 [简体中文](STATUS.zh-CN.md)
 
-Version 1.7.6, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+Version 1.7.7, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+
+## v1.7.7 update
+- Shortened Patrick Star cleanup success overlay from 3,000 ms (+200 ms fade) to a quick 700 ms flash (+150 ms fade) alongside the confirmation tone.
 
 ## v1.7.6 update
 - Removed the hardcoded boot-time auto-launch of ChatGPT (`boot_count` check in `MainActivity.onCreate`) so rebooting stays on the home launcher instead of jumping into ChatGPT without user input; `ensureProxyOnStart()` still runs when enabled.

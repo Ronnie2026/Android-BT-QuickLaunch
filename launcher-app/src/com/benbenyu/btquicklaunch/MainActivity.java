@@ -1640,10 +1640,10 @@ public class MainActivity extends Activity {
     AppLog.write("CLEAN_FEEDBACK shown", null);
     feedbackHandler.postDelayed(() -> {
       if (cleanFeedback != overlay) return;
-      overlay.animate().alpha(0f).setDuration(200).withEndAction(() -> {
+      overlay.animate().alpha(0f).setDuration(150).withEndAction(() -> {
         if (cleanFeedback == overlay) clearCleanFeedback();
       }).start();
-    }, 3000);
+    }, 700);
   }
 
   void clean() {
