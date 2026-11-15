@@ -219,23 +219,7 @@ public class MainActivity extends Activity {
     if (b == null && p.getBoolean("disable_ime", true)) ImeGuard.apply(this, p, true, false);
     draw();
     if (getIntent().hasExtra("button_action")) button(getIntent());
-    else {
-      int boot = android.provider.Settings.Global.getInt(getContentResolver(), "boot_count", -1);
-      if (b == null && p.getInt("auto_boot", -2) != boot) {
-        p.edit().putInt("auto_boot", boot).apply();
-        h.postDelayed(
-            () -> {
-              for (int i = 0; i < 4; i++)
-                if (get(i, "pkg", pkgs[i]).equals("com.openai.chatgpt")) {
-                  if (!needsProxy(i, "com.openai.chatgpt")) ensureProxyOnStart();
-                  launch(i); // a guarded GPT launch already ensures the proxy
-                  return;
-                }
-              ensureProxyOnStart();
-            },
-            800);
-      } else if (b == null) ensureProxyOnStart();
-    }
+    else if (b == null) ensureProxyOnStart();
     if (b == null && p.getBoolean(AppUpdater.PREF_AUTO_CHECK, true)) {
       h.postDelayed(() -> AppUpdater.autoCheckIfDue(this, p), 6000);
     }

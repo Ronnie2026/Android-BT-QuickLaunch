@@ -2,7 +2,11 @@
 
 [English (default)](STATUS.md)
 
-版本 1.7.5，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+版本 1.7.6，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+
+## v1.7.6 更新说明
+
+- 移除 `MainActivity.onCreate` 中硬编码的开机自启 ChatGPT 逻辑（`boot_count` 判断），手机重启后安静停留在桌面，不再在未唤醒的情况下自动跳入 ChatGPT；若开启了“桌面启动时自动开启 Clash”，仍会正常在后台启动代理。
 
 ## v1.7.5 封版说明
 

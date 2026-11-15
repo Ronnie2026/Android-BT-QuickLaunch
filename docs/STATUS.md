@@ -2,7 +2,10 @@
 
 [简体中文](STATUS.zh-CN.md)
 
-Version 1.7.5, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+Version 1.7.6, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+
+## v1.7.6 update
+- Removed the hardcoded boot-time auto-launch of ChatGPT (`boot_count` check in `MainActivity.onCreate`) so rebooting stays on the home launcher instead of jumping into ChatGPT without user input; `ensureProxyOnStart()` still runs when enabled.
 
 ## v1.7.5 release summary
 - Added in-app auto-update (`AppUpdater.java` + `UpdateApkProvider.java`) in **General Settings -> Software Update**, defaulting to **GitHub Releases** (`Ronnie2026/Android-BT-QuickLaunch`) with manual source selection (no automatic fallback on failure).
