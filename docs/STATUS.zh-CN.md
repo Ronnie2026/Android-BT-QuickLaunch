@@ -2,7 +2,11 @@
 
 [English (default)](STATUS.md)
 
-版本 1.7.8，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+版本 1.7.9，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+
+## v1.7.9 更新说明
+
+- 将清理成功提示层文字改为英文 `Apps Cleared`。
 
 ## v1.7.8 更新说明
 

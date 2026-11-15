@@ -1615,7 +1615,7 @@ public class MainActivity extends Activity {
     if (idlePower != null) idlePower.activity("clean_success");
     final FrameLayout overlay = new FrameLayout(this);
     cleanFeedback = overlay;
-    overlay.setContentDescription("后台清理成功");
+    overlay.setContentDescription("Apps Cleared");
     final LinearLayout successContent = new LinearLayout(this);
     successContent.setOrientation(LinearLayout.VERTICAL);
     successContent.setGravity(Gravity.CENTER);
@@ -1626,7 +1626,7 @@ public class MainActivity extends Activity {
     patrick.setImageResource(getResources().getIdentifier("cleanup_patrick", "drawable", getPackageName()));
     successContent.addView(patrick, new LinearLayout.LayoutParams(-1, 0, 1));
     final TextView message = new TextView(this);
-    message.setText("后台清理成功");
+    message.setText("Apps Cleared");
     message.setTextSize(64);
     message.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
     message.setTextColor(0xffb6f4dc);

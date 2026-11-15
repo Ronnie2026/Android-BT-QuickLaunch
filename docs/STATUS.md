@@ -2,7 +2,10 @@
 
 [简体中文](STATUS.zh-CN.md)
 
-Version 1.7.8, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+Version 1.7.9, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+
+## v1.7.9 update
+- Updated cleanup success overlay caption to `Apps Cleared`.
 
 ## v1.7.8 update
 - Updated cleanup success overlay caption to `后台清理成功`.
