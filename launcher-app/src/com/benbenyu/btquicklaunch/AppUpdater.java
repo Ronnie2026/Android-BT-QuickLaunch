@@ -28,21 +28,22 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
- * Checks GitHub Releases (primary) and Gitee Releases (fallback) for newer APKs, downloads them,
- * and invokes the system installer.
+ * Checks GitHub Releases (default) or Gitee Releases (manual selection only) for newer APKs,
+ * downloads them, and invokes the system installer. No automatic fallback between sources.
  */
 public class AppUpdater {
   static final String DEFAULT_GITEE_REPO = "Ronnie2026/Android-BT-QuickLaunch";
   static final String GITHUB_RELEASES_API =
       "https://api.github.com/repos/Ronnie2026/Android-BT-QuickLaunch/releases/latest";
+  static final String GITHUB_RELEASES_PAGE =
+      "https://github.com/Ronnie2026/Android-BT-QuickLaunch/releases";
   static final String PREF_AUTO_CHECK = "auto_update_check";
   static final String PREF_LAST_CHECK = "auto_update_last_check";
   static final String PREF_MIRROR = "update_mirror";
   static final String PREF_GITEE_REPO = "update_gitee_repo";
   static final String PREF_SOURCE_MODE = "update_source_mode";
-  static final int SOURCE_AUTO = 0;
+  static final int SOURCE_GITHUB = 0;
   static final int SOURCE_GITEE = 1;
-  static final int SOURCE_GITHUB = 2;
   static final long AUTO_CHECK_INTERVAL_MS = 6L * 60L * 60L * 1000L;
 
   static final class ReleaseInfo {
@@ -72,16 +73,12 @@ public class AppUpdater {
   }
 
   static int sourceMode(SharedPreferences p) {
-    if (p == null) return SOURCE_AUTO;
-    int m = p.getInt(PREF_SOURCE_MODE, SOURCE_AUTO);
-    return (m >= SOURCE_AUTO && m <= SOURCE_GITHUB) ? m : SOURCE_AUTO;
+    if (p == null) return SOURCE_GITHUB;
+    return p.getInt(PREF_SOURCE_MODE, SOURCE_GITHUB) == SOURCE_GITEE ? SOURCE_GITEE : SOURCE_GITHUB;
   }
 
   static String sourceLabel(SharedPreferences p) {
-    int m = sourceMode(p);
-    if (m == SOURCE_GITEE) return "仅 Gitee";
-    if (m == SOURCE_GITHUB) return "仅 GitHub";
-    return "自动（GitHub 优先）";
+    return sourceMode(p) == SOURCE_GITEE ? "Gitee（手动）" : "GitHub（默认）";
   }
 
   static String giteeRepo(SharedPreferences p) {
@@ -106,9 +103,7 @@ public class AppUpdater {
     String msg =
         mode == SOURCE_GITEE
             ? "正在从 Gitee 检测最新版本…"
-            : mode == SOURCE_GITHUB
-                ? "正在从 GitHub 检测最新版本…"
-                : "正在检测最新版本（优先 GitHub，备用 Gitee）…";
+            : "正在从 GitHub 检测最新版本…";
     AlertDialog checkingDialog =
         silent
             ? null
@@ -145,9 +140,11 @@ public class AppUpdater {
                         new AlertDialog.Builder(act)
                             .setTitle("检查更新失败")
                             .setMessage(
-                                "Gitee 与 GitHub 均未能获取最新版本：\n"
+                                "无法从 "
+                                    + (sourceMode(p) == SOURCE_GITEE ? "Gitee" : "GitHub")
+                                    + " 获取最新版本：\n"
                                     + (err != null ? err : "未知错误")
-                                    + "\n\n请检查网络连接或设置中的仓库/代理配置。")
+                                    + "\n\n请检查网络连接或 VPN 代理配置。")
                             .setPositiveButton("知道了", null)
                             .show();
                       }
@@ -232,35 +229,7 @@ public class AppUpdater {
               try {
                 downloadApkToCache(act, p, release, cancelled, bar, status);
               } catch (Exception primaryErr) {
-                if (cancelled.get()) {
-                  error = "已取消下载";
-                } else if ("GitHub".equals(release.source) && sourceMode(p) == SOURCE_AUTO) {
-                  // GitHub download failed; automatically fall back to Gitee Releases.
-                  act.runOnUiThread(
-                      () -> {
-                        if (!act.isDestroyed() && !act.isFinishing()) {
-                          bar.setIndeterminate(true);
-                          status.setText("GitHub 下载失败，正在切换 Gitee 备用源…");
-                        }
-                      });
-                  try {
-                    String giteeApi =
-                        "https://gitee.com/api/v5/repos/" + giteeRepo(p) + "/releases/latest";
-                    ReleaseInfo gitee = fetchReleaseFromApi(giteeApi, "Gitee", false);
-                    if (compareVersions(gitee.version, currentVersion(act)) <= 0) {
-                      throw new IllegalStateException("Gitee 暂无可升级版本");
-                    }
-                    downloadApkToCache(act, p, gitee, cancelled, bar, status);
-                  } catch (Exception giteeErr) {
-                    error =
-                        "GitHub："
-                            + msgOf(primaryErr)
-                            + "\nGitee 备用："
-                            + msgOf(giteeErr);
-                  }
-                } else {
-                  error = msgOf(primaryErr);
-                }
+                error = cancelled.get() ? "已取消下载" : msgOf(primaryErr);
               }
               final String err = error;
               act.runOnUiThread(
@@ -269,10 +238,31 @@ public class AppUpdater {
                     if (progressDialog.isShowing()) progressDialog.dismiss();
                     if (cancelled.get()) return;
                     if (err != null) {
+                      boolean isGitee = "Gitee".equals(release.source);
+                      String pageUrl =
+                          isGitee
+                              ? "https://gitee.com/" + giteeRepo(p) + "/releases"
+                              : GITHUB_RELEASES_PAGE;
+                      String tip =
+                          isGitee
+                              ? "下载失败：" + err + "\n\n请检查网络，或前往 Gitee Releases 页面手动下载更新：\n" + pageUrl
+                              : "GitHub 下载失败："
+                                  + err
+                                  + "\n\n请确认网络或代理状态，也可以前往 GitHub Releases 页面手动下载最新安装包：\n"
+                                  + pageUrl;
                       new AlertDialog.Builder(act)
                           .setTitle("下载失败")
-                          .setMessage(err)
+                          .setMessage(tip)
                           .setPositiveButton("知道了", null)
+                          .setNeutralButton(
+                              "打开 Release 页面",
+                              (d, w) -> {
+                                try {
+                                  act.startActivity(
+                                      new Intent(Intent.ACTION_VIEW, Uri.parse(pageUrl)));
+                                } catch (Exception ignored) {
+                                }
+                              })
                           .show();
                       return;
                     }
@@ -409,25 +399,11 @@ public class AppUpdater {
   }
 
   private static ReleaseInfo fetchLatestWithFallback(SharedPreferences p) throws Exception {
-    int mode = sourceMode(p);
-    String giteeApi = "https://gitee.com/api/v5/repos/" + giteeRepo(p) + "/releases/latest";
-    if (mode == SOURCE_GITEE) {
+    if (sourceMode(p) == SOURCE_GITEE) {
+      String giteeApi = "https://gitee.com/api/v5/repos/" + giteeRepo(p) + "/releases/latest";
       return fetchReleaseFromApi(giteeApi, "Gitee", false);
     }
-    if (mode == SOURCE_GITHUB) {
-      return fetchReleaseFromApi(GITHUB_RELEASES_API, "GitHub", true);
-    }
-    Exception ghErr;
-    try {
-      return fetchReleaseFromApi(GITHUB_RELEASES_API, "GitHub", true);
-    } catch (Exception e) {
-      ghErr = e;
-    }
-    try {
-      return fetchReleaseFromApi(giteeApi, "Gitee", false);
-    } catch (Exception giteeErr) {
-      throw new IllegalStateException("GitHub：" + msgOf(ghErr) + "\nGitee：" + msgOf(giteeErr));
-    }
+    return fetchReleaseFromApi(GITHUB_RELEASES_API, "GitHub", true);
   }
 
   private static ReleaseInfo fetchReleaseFromApi(

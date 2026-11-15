@@ -27,4 +27,4 @@
   1. Bump `android:versionCode` and `android:versionName` in `launcher-app/AndroidManifest.xml`.
   2. Build and sign `dist\BT-QuickLaunch-vX.Y.Z.apk` locally via `build-home.ps1` (must use `.keys\btquicklaunch.jks`).
   3. Push `main` and annotated tag `vX.Y.Z` to `origin` (GitHub) and publish the GitHub Release with `dist\BT-QuickLaunch-vX.Y.Z.apk` attached (`.\release.ps1` automates steps 2–3).
-- **Gitee (`gitee`) is low-frequency / on-demand:** Only push or publish Gitee Releases when explicitly requested by the user (pass `-IncludeGitee` to `.\release.ps1`). In-app `AppUpdater.java` checks **GitHub Releases first** and falls back to **Gitee Releases**.
+- **Gitee (`gitee`) is low-frequency / on-demand:** Only push or publish Gitee Releases when explicitly requested by the user (pass `-IncludeGitee` to `.\release.ps1`). In-app `AppUpdater.java` defaults to **GitHub Releases** only, with no automatic fallback.
