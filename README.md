@@ -61,13 +61,15 @@ Output: `dist/BT-QuickLaunch-v<version>.apk`. A local signing key is generated i
 ## Install
 
 ```bash
-adb install -r dist/BT-QuickLaunch-v1.6.0.apk
+adb install -r dist/BT-QuickLaunch-v1.7.0.apk
 adb shell cmd package set-home-activity com.benbenyu.btquicklaunch/.MainActivity
 ```
 
 Then enable the accessibility service, pair the keyboard, and optionally install `phone-config/92-btquicklaunch.sh` to `/data/adb/service.d/` (mode 755) for boot-time recovery.
 
 ## Repository layout
+
+For project background, actual button-recognition rules, reliability limits and iteration guidance, read [Project context](docs/PROJECT_CONTEXT.md). Current matching uses accessibility resource IDs **and descriptions**, not OCR or fixed-coordinate recognition; visible node text is not currently used by the voice matcher.
 
 | Path | Content |
 |---|---|

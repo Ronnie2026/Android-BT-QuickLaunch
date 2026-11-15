@@ -224,6 +224,11 @@ public class ButtonService extends AccessibilityService {
         || desc.equalsIgnoreCase("Mute microphone");
   }
 
+  /**
+   * Match accessibility view resource IDs or content descriptions, not visible node text.
+   * Bounds are read after identification for eligibility and gesture delivery; no fixed-coordinate
+   * or screenshot/OCR recognition is used. See docs/PROJECT_CONTEXT.md for adapter limitations.
+   */
   boolean isVoiceTrigger(android.view.accessibility.AccessibilityNodeInfo node, String desc) {
     if (isDoubaoTarget()) {
       String id = node.getViewIdResourceName();

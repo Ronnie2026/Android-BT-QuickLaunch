@@ -61,13 +61,15 @@
 ## 安装
 
 ```bash
-adb install -r dist/BT-QuickLaunch-v1.6.0.apk
+adb install -r dist/BT-QuickLaunch-v1.7.0.apk
 adb shell cmd package set-home-activity com.benbenyu.btquicklaunch/.MainActivity
 ```
 
 然后开启无障碍服务、配对键盘；如需开机自动恢复，把 `phone-config/92-btquicklaunch.sh` 放到 `/data/adb/service.d/`（权限 755）。
 
 ## 目录结构
+
+项目背景、按钮识别的实际规则、可靠性边界和后续迭代说明见[项目知识背景](docs/PROJECT_CONTEXT.md)。当前使用无障碍资源 ID **及无障碍描述**识别，不使用 OCR 或固定坐标识别；语音按钮匹配目前没有读取控件可见文字。这里的“无障碍 ID／控件 ID”指同一类资源标识，不是两套识别方式。
 
 | 路径 | 内容 |
 |---|---|
