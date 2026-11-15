@@ -113,7 +113,8 @@ public class NetIndicators extends View {
     float unit = getResources().getDisplayMetrics().density;
     c.save();
     c.scale(unit, unit);
-    boolean paper = getContext().getSharedPreferences("home", 0).getBoolean("paper_theme", false);
+    android.content.SharedPreferences prefs = getContext().getSharedPreferences("home", 0);
+    boolean paper = prefs.getBoolean("paper_theme", false) && !prefs.getBoolean("paper_dark", false);
     p.setColor(paper ? 0xff454545 : 0xffb5bdc9);
     p.setStrokeCap(Paint.Cap.ROUND);
     int slot = 0;

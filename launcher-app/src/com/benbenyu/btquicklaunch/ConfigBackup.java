@@ -72,11 +72,11 @@ final class ConfigBackup {
     while (keys.hasNext()) {
       String key = keys.next();
       if (!key.matches(
-          "[0-3](name|pkg|before|delay|voice|icon)|background|wallpaper|brightness|breathing|paper_theme|idle_power|proxy_guard|proxy_on_boot|proxy_apps|disable_ime|bt_connect_sound|reminder_enabled|reminder_media|reminder_keyboard_connected|reminder_keyboard_disconnected|reminder_keyboard_low|reminder_phone_low|clean_success_sound|clean_success_tone|reminder_tone|reminder_(keyboard_(connected|disconnected|low)|phone_low)_(media|tone)"))
+          "[0-3](name|pkg|before|delay|voice|icon)|background|wallpaper|brightness|breathing|paper_theme|paper_dark|idle_power|proxy_guard|proxy_on_boot|proxy_apps|disable_ime|bt_connect_sound|reminder_enabled|reminder_media|reminder_keyboard_connected|reminder_keyboard_disconnected|reminder_keyboard_low|reminder_phone_low|clean_success_sound|clean_success_tone|reminder_tone|reminder_(keyboard_(connected|disconnected|low)|phone_low)_(media|tone)"))
         continue;
       Object value = j.get(key);
       boolean boolKey =
-          key.matches("reminder_(enabled|keyboard_connected|keyboard_disconnected|keyboard_low|phone_low)") || key.equals("clean_success_sound") || key.endsWith("voice") || (key.equals("proxy_guard") || key.equals("proxy_on_boot")) || key.equals("breathing") || key.equals("paper_theme") || key.equals("idle_power") || key.equals("disable_ime") || key.equals("bt_connect_sound");
+          key.matches("reminder_(enabled|keyboard_connected|keyboard_disconnected|keyboard_low|phone_low)") || key.equals("clean_success_sound") || key.endsWith("voice") || (key.equals("proxy_guard") || key.equals("proxy_on_boot")) || key.equals("breathing") || key.equals("paper_theme") || key.equals("paper_dark") || key.equals("idle_power") || key.equals("disable_ime") || key.equals("bt_connect_sound");
       boolean intKey =
           key.endsWith("delay") || key.equals("background") || key.equals("brightness");
       if (boolKey && !(value instanceof Boolean)

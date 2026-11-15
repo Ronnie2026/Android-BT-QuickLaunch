@@ -12,12 +12,18 @@ public class ButtonService extends AccessibilityService {
   static ButtonService instance;
   static long voiceUntil;
   static String voicePkg = "";
+  final android.graphics.Rect voiceButtonBounds = new android.graphics.Rect();
+  long voiceButtonStableSince, voiceButtonLastClick;
+  int voiceClickAttempts;
   android.os.Handler handler = new android.os.Handler();
 
   public static void cancelVoice() {
     voiceUntil = 0;
     voicePkg = "";
-    if (instance != null) instance.handler.removeCallbacks(instance.retry);
+    if (instance != null) {
+      instance.handler.removeCallbacks(instance.retry);
+      instance.resetVoiceClick();
+    }
   }
 
   public static void requestVoice() {
@@ -25,8 +31,10 @@ public class ButtonService extends AccessibilityService {
   }
 
   public static void requestVoice(String pkg) {
+    cancelVoice();
     voicePkg = pkg == null ? "" : pkg;
     voiceUntil = android.os.SystemClock.elapsedRealtime() + 15000;
+    AppLog.write("VOICE_REQUEST pkg=" + voicePkg, null);
     if (instance != null) instance.handler.post(instance::voice);
   }
 
@@ -137,7 +145,11 @@ public class ButtonService extends AccessibilityService {
   void voice() {
     visited = 0;
     long now = android.os.SystemClock.elapsedRealtime();
-    if (now > voiceUntil) return;
+    if (now > voiceUntil) {
+      if (!voicePkg.isEmpty()) AppLog.write("VOICE_TIMEOUT pkg=" + voicePkg + " attempts=" + voiceClickAttempts, null);
+      cancelVoice();
+      return;
+    }
     if (isGeminiTarget() && hasImeWindow()) {
       if (now - lastImeDismiss > 800) {
         lastImeDismiss = now;
@@ -157,7 +169,13 @@ public class ButtonService extends AccessibilityService {
           return;
         }
         visited = 0;
-        if (find(root, false)) {
+        if ((!(isDoubaoTarget() || isGeminiTarget()) || (voiceClickAttempts < 3 && now - voiceButtonLastClick >= 1500))
+            && find(root, false)) {
+          if (isDoubaoTarget() || isGeminiTarget()) {
+            handler.removeCallbacks(retry);
+            handler.postDelayed(retry, 600);
+            return;
+          }
           AppLog.write("VOICE_CLICKED pkg=" + voicePkg, null);
           cancelVoice();
           return;
@@ -172,12 +190,25 @@ public class ButtonService extends AccessibilityService {
 
   Runnable retry = () -> voice();
 
+  void resetVoiceClick() {
+    voiceButtonBounds.setEmpty();
+    voiceButtonStableSince = 0;
+    voiceButtonLastClick = 0;
+    voiceClickAttempts = 0;
+  }
+
   boolean isActiveDesc(String desc) {
     if (isDoubaoTarget())
       return desc.equals("挂断") || desc.equals("挂断电话") || desc.equals("结束通话")
+          || desc.equals("挂断通话")
           || desc.equalsIgnoreCase("End call");
     if (isGeminiTarget()) {
-      return desc.equals("结束实时对话")
+      return desc.equals("结束 Live 模式")
+          || desc.equals("结束Live模式")
+          || desc.equals("开启/关闭摄像头")
+          || desc.equals("打开/关闭麦克风")
+          || desc.equalsIgnoreCase("End Live mode")
+          || desc.equals("结束实时对话")
           || desc.equals("结束")
           || desc.equals("暂停")
           || desc.equals("开启摄像头")
@@ -194,9 +225,15 @@ public class ButtonService extends AccessibilityService {
   }
 
   boolean isVoiceTrigger(android.view.accessibility.AccessibilityNodeInfo node, String desc) {
-    if (isDoubaoTarget())
-      return "com.larus.nova:id/real_time_call".equals(node.getViewIdResourceName())
-          || desc.equals("打电话");
+    if (isDoubaoTarget()) {
+      String id = node.getViewIdResourceName();
+      if ("com.larus.nova:id/real_time_call".equals(id)
+          || "com.larus.nova:id/real_time_call_ic_container".equals(id)) return true;
+      android.graphics.Rect bounds = new android.graphics.Rect();
+      node.getBoundsInScreen(bounds);
+      return desc.equals("打电话") && bounds.top >= 0
+          && bounds.bottom <= getResources().getDisplayMetrics().heightPixels / 3;
+    }
     if (isGeminiTarget()) {
       String id = node.getViewIdResourceName();
       if ("com.google.android.googlequicksearchbox:id/assistant_robin_input_voice_chat_button_compose"
@@ -219,8 +256,12 @@ public class ButtonService extends AccessibilityService {
   boolean find(android.view.accessibility.AccessibilityNodeInfo node, boolean active) {
     if (++visited > 512) return false;
     String desc = String.valueOf(node.getContentDescription());
-    if (active && isActiveDesc(desc)) return true;
+    if (active && node.isVisibleToUser()
+        && (isActiveDesc(desc) || (isDoubaoTarget()
+            && ("com.larus.nova:id/realtime_call_root".equals(node.getViewIdResourceName())
+                || "com.larus.nova:id/voice_call_hangup".equals(node.getViewIdResourceName()))))) return true;
     if (!active && isVoiceTrigger(node, desc) && node.isVisibleToUser()) {
+      if (isDoubaoTarget() || isGeminiTarget()) return clickVoiceButton(node);
       android.view.accessibility.AccessibilityNodeInfo target = node;
       while (target != null) {
         if (target.isClickable() && target.performAction(16)) return true;
@@ -250,6 +291,50 @@ public class ButtonService extends AccessibilityService {
       }
     }
     return false;
+  }
+
+  boolean clickVoiceButton(android.view.accessibility.AccessibilityNodeInfo node) {
+    android.graphics.Rect bounds = new android.graphics.Rect();
+    node.getBoundsInScreen(bounds);
+    if (bounds.isEmpty() || !node.isEnabled()) return false;
+    long now = android.os.SystemClock.elapsedRealtime();
+    // Rotation from the landscape launcher can expose a transient, stale button location.
+    if (!bounds.equals(voiceButtonBounds)) {
+      voiceButtonBounds.set(bounds);
+      voiceButtonStableSince = now;
+      return false;
+    }
+    if (now - voiceButtonStableSince < 350) return false;
+    boolean accepted = false;
+    // Alternate semantic click and a gesture at the currently observed button, never fixed coordinates.
+    if (!isGeminiTarget() && voiceClickAttempts != 1) {
+      android.view.accessibility.AccessibilityNodeInfo target = node;
+      try {
+        for (int depth = 0; target != null && depth < 5; depth++) {
+          if (target.isEnabled() && target.isClickable()
+              && target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)) {
+            accepted = true;
+            break;
+          }
+          android.view.accessibility.AccessibilityNodeInfo parent = target.getParent();
+          if (target != node) target.recycle();
+          target = parent;
+        }
+      } finally {
+        if (target != null && target != node) target.recycle();
+      }
+    }
+    if (!accepted) {
+      android.graphics.Path path = new android.graphics.Path();
+      path.moveTo(bounds.centerX(), bounds.centerY());
+      accepted = dispatchGesture(new GestureDescription.Builder()
+          .addStroke(new GestureDescription.StrokeDescription(path, 0, 60)).build(), null, null);
+    }
+    voiceButtonLastClick = now;
+    voiceClickAttempts++;
+    AppLog.write("VOICE_CLICK_ATTEMPT pkg=" + voicePkg + " attempt=" + voiceClickAttempts
+        + " accepted=" + accepted + " bounds=" + bounds.toShortString(), null);
+    return accepted;
   }
 
   Map<Integer, Set<Integer>> held = new HashMap<>();

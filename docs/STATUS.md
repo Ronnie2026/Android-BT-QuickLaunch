@@ -1,6 +1,16 @@
 # Project status
 
-Version 1.6.0, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+Version 1.7.0, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+
+## v1.7.0 validation
+- Bundled static XML wallpapers default to black; system image selection remains available. Corrected the gallery tile index that previously opened the picker for Graphite.
+- Added black and normal eye-comfort e-book themes, preserving the previous paper-theme preference. Theme selections include backup/restore support.
+- Added a chip icon with whole-device RAM usage, refreshed every ten seconds while visible and interactive; polling stops on screen-off and activity pause.
+- Doubao and Gemini wait for stable button bounds, attempt at most three clicks, and confirm call controls before stopping. Current Doubao hangup and Gemini Live labels are recognized.
+- Device UI tests confirmed both e-book modes, memory display, image-picker opening/cancel, and screen-off recovery.
+- Device launch tests confirmed Doubao cold/warm call entry and Gemini landscape Live entry; already-active calls are recognized without repeating the click.
+- VoiceTargetChecks, ProcessStateChecks, ReminderEventChecks, SystemToneUriChecks, DeviceChecks, HidStateChecks and ReminderChecks passed against the release classes. Backup checks include the black e-book setting.
+- Grok Bot is a separate app and has no automatic voice-entry integration in this release.
 
 ## Verified on device
 - Build, signing, install over existing version

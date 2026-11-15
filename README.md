@@ -17,8 +17,13 @@ The phone runs this launcher as its default home screen. A paired Bluetooth keyp
 - ChatGPT / Gemini voice launch with local network and VPN/proxy checks; starts Clash Meta and re-checks when needed (no external connectivity probes)
 - Successful background cleanup displays Patrick Star with a large “搞定了” caption and an optional system confirmation tone; triggered by holding/double-tapping X or pressing all three keyboard keys.
 - Doubao automatically clicks its phone control after launch, using accessibility nodes in its portrait interface. Account quota limits still apply.
+- Doubao waits for a stable phone-button location after rotation and confirms the call screen before stopping; up to three attempts alternate node clicks and gestures at the detected button.
+- Gemini Live uses the detected button bounds for a gesture click and confirms current Live controls before stopping, with bounded retries; no fixed screen coordinates.
 - Background app indicator, battery / Wi-Fi / mobile / Bluetooth status icons (including BLE keyboard battery level when reported via GATT)
 - Color and e-paper style themes, custom wallpapers and icons
+- Bundled static XML wallpapers default to pure black, require no decoded bitmap or animation, and remain available offline. System image selection is optional.
+- Top-right whole-device RAM usage refreshes every 10 seconds while the home screen is visible and the display is on; tap for capacity details. Available RAM includes reclaimable memory.
+- E-book themes offer black (monochrome dimmed icons on pure black) and normal eye-comfort (warm paper) modes, plus off. Previous paper-theme settings retain the normal mode. RAM is shown with a chip icon and percentage.
 - Reminder settings are organized by event: each event shows its saved voice or tone, with selection and draft preview in one dialog. Cancel keeps the saved setting; legacy shared choices remain defaults until overridden.
 - An orange ring around an app icon indicates its background process is running. State follows the package when slots are reordered; cleanup requests an immediate refresh.
 - Eight bundled Android AOSP notification sounds support selection and preview for general tone reminders and cleanup success independently; offline app assets only, with no external imports or device media-provider dependency.

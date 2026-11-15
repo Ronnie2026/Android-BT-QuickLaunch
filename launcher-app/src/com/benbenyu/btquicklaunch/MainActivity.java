@@ -17,6 +17,7 @@ public class MainActivity extends Activity {
   final Handler feedbackHandler = new Handler();
   IdlePower idlePower;
   NetIndicators networkIndicators;
+  MemoryIndicator memoryIndicator;
   CircularIconView[] activityIcons = new CircularIconView[4];
   Handler statusHandler = new Handler();
   boolean desktopVisible = false, statusChecking = false, statusRefreshRequested = false;
@@ -155,6 +156,7 @@ public class MainActivity extends Activity {
     super.onResume();
     if(idlePower==null)idlePower=new IdlePower(this);idlePower.start();
     if (networkIndicators != null) networkIndicators.start();
+    if (memoryIndicator != null) memoryIndicator.start();
     desktopVisible = true;
     statusHandler.removeCallbacks(statusTick);
     statusHandler.post(statusTick);
@@ -175,6 +177,7 @@ public class MainActivity extends Activity {
     clearCleanFeedback();
     if(idlePower!=null)idlePower.stop();
     if (networkIndicators != null) networkIndicators.stop();
+    if (memoryIndicator != null) memoryIndicator.stop();
     desktopVisible = false;
     for (CircularIconView icon : activityIcons) if (icon != null) icon.stopPulse();
     statusHandler.removeCallbacks(statusTick);
@@ -256,7 +259,7 @@ public class MainActivity extends Activity {
     TextView t = new TextView(this);
     t.setText(s);
     t.setTextSize(size);
-    t.setTextColor(p != null && p.getBoolean("paper_theme", false) ? 0xff252525 : Color.WHITE);
+    t.setTextColor(lightPaper() ? 0xff252525 : 0xffcccccc);
     t.setPadding(dp(12), dp(12), dp(12), dp(12));
     return t;
   }
@@ -325,7 +328,13 @@ public class MainActivity extends Activity {
     statusParams.rightMargin = dp(12);
     root.addView(statusBar, statusParams);
 
-    boolean paper = p.getBoolean("paper_theme", false);
+    boolean paper = lightPaper();
+    if (memoryIndicator != null) memoryIndicator.stop();
+    memoryIndicator = new MemoryIndicator(this, paper);
+    LinearLayout.LayoutParams memoryParams = new LinearLayout.LayoutParams(-2, dp(36));
+    memoryParams.rightMargin = dp(8);
+    statusBar.addView(memoryIndicator, memoryParams);
+    if (desktopVisible) memoryIndicator.start();
     networkIndicators = new NetIndicators(this);
     statusBar.addView(networkIndicators, new LinearLayout.LayoutParams(0, dp(36)));
 
@@ -357,6 +366,11 @@ public class MainActivity extends Activity {
     if (p.getBoolean("paper_theme", false)) {
       android.graphics.ColorMatrix gray = new android.graphics.ColorMatrix();
       gray.setSaturation(0);
+      if (p.getBoolean("paper_dark", false)) {
+        android.graphics.ColorMatrix dim = new android.graphics.ColorMatrix();
+        dim.setScale(.60f, .60f, .60f, 1f);
+        gray.postConcat(dim);
+      }
       android.graphics.Paint filter = new android.graphics.Paint();
       filter.setColorFilter(new android.graphics.ColorMatrixColorFilter(gray));
       root.setLayerType(View.LAYER_TYPE_HARDWARE, filter);
@@ -369,7 +383,7 @@ public class MainActivity extends Activity {
     cancelLaunch();
     if (settingsDialog == null || !settingsDialog.isShowing()) settingsPanel();
     settingsContent.removeAllViews();
-    boolean paper = p.getBoolean("paper_theme", false);
+    boolean paper = lightPaper();
     LinearLayout header = new LinearLayout(this);
     header.setGravity(Gravity.CENTER_VERTICAL);
     header.setPadding(0, 0, 0, dp(8));
@@ -390,7 +404,7 @@ public class MainActivity extends Activity {
   }
 
   void option(String name, Runnable action) {
-    boolean paper = p.getBoolean("paper_theme", false);
+    boolean paper = lightPaper();
     LinearLayout card = IosUi.card(this, paper);
     card.addView(IosUi.disclosureRow(this, name, "", paper, false, action));
     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
@@ -450,7 +464,7 @@ public class MainActivity extends Activity {
     if (settingsDialog != null && settingsDialog.isShowing()) settingsDialog.dismiss();
     final Dialog dialog = new Dialog(this){public boolean dispatchTouchEvent(android.view.MotionEvent e){if(e.getActionMasked()==android.view.MotionEvent.ACTION_DOWN&&idlePower!=null)idlePower.activity("settings_touch");return super.dispatchTouchEvent(e);}};
     settingsDialog = dialog;
-    boolean paper = p.getBoolean("paper_theme", false);
+    boolean paper = lightPaper();
     LinearLayout panel = new LinearLayout(this);
     panel.setOrientation(1);
     panel.setPadding(dp(16), dp(10), dp(16), dp(10));
@@ -518,7 +532,7 @@ public class MainActivity extends Activity {
   }
 
   void fillApps(LinearLayout grid, Dialog dialog) {
-    boolean paper = p.getBoolean("paper_theme", false);
+    boolean paper = lightPaper();
     for (int row = 0; row < 2; row++) {
       LinearLayout line = new LinearLayout(this);
       grid.addView(line, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -647,7 +661,7 @@ public class MainActivity extends Activity {
   }
 
   void fillOther(LinearLayout content) {
-    boolean paper = p.getBoolean("paper_theme", false);
+    boolean paper = lightPaper();
     ScrollView scroll = new ScrollView(this);
     LinearLayout body = new LinearLayout(this);
     body.setOrientation(1);
@@ -657,18 +671,19 @@ public class MainActivity extends Activity {
 
     body.addView(IosUi.header(this, "外观与显示", paper));
     LinearLayout appCard = IosUi.card(this, paper);
-    appCard.addView(
-        IosUi.switchRow(
-            this,
-            "电子书纸白主题",
-            paper,
-            paper,
-            null,
-            (v, on) -> {
-              p.edit().putBoolean("paper_theme", on).apply();
+    String[] paperModes = {"关闭", "黑色电子书主题", "普通护眼模式电子书主题"};
+    int paperMode = !p.getBoolean("paper_theme", false) ? 0 : p.getBoolean("paper_dark", false) ? 1 : 2;
+    appCard.addView(IosUi.disclosureRow(this, "电子书主题", paperModes[paperMode], paper, false,
+        () -> new AlertDialog.Builder(this)
+            .setTitle("电子书主题")
+            .setSingleChoiceItems(paperModes, paperMode, (dialog, which) -> {
+              p.edit().putBoolean("paper_theme", which != 0).putBoolean("paper_dark", which == 1).apply();
+              dialog.dismiss();
               draw();
               settingsPanel();
-            }));
+            }).setNegativeButton("取消", null).show()));
+    body.addView(IosUi.footer(this,
+        "黑色电子书：纯黑背景、柔灰图标，适合夜间。普通护眼电子书：暖纸色背景，适合白天。两种均为静态显示；屏幕仍会发光，可配合桌面亮度和自动调暗。", paper));
     appCard.addView(IosUi.divider(this, paper));
     appCard.addView(
         IosUi.switchRow(
@@ -893,7 +908,7 @@ public class MainActivity extends Activity {
             .setNegativeButton("关闭", null).show()));
     body.addView(sysCard);
 
-    TextView ver = IosUi.footer(this, "BT QuickLaunch 1.6.0 · 双击 1 / 2 / 3 启动 · 三键清理", paper);
+    TextView ver = IosUi.footer(this, "BT QuickLaunch 1.7.0 · 双击 1 / 2 / 3 启动 · 三键清理", paper);
     ver.setGravity(Gravity.CENTER);
     ver.setPadding(0, dp(18), 0, dp(8));
     body.addView(ver);
@@ -1003,14 +1018,7 @@ public class MainActivity extends Activity {
   }
 
   void fillWallpapers(LinearLayout content) {
-    String[] labels = {"纯黑", "纯白", "暗夜精灵", "午夜星雾", "幽谷微光", "石墨流光", "曜石丝绸", "深海弧影", "烟金暮色", "相册壁纸"};
-    int[][] palettes = {
-      {0xff000000, 0xff000000},
-      {0xffffffff, 0xffffffff},
-      {0xff010604, 0xff102a21, 0xff020705},
-      {0xff03040a, 0xff1a1730, 0xff030710},
-      {0xff010707, 0xff103034, 0xff020508}
-    };
+    String[] labels = {"纯黑 · 默认静态", "纯白 · 静态", "墨绿 · 静态", "蓝紫 · 静态", "青黑 · 静态", "石墨 · 静态", "曜石 · 静态", "深海 · 静态", "烟金 · 静态", "从系统选择图片"};
     ScrollView scroll = new ScrollView(this);
     LinearLayout gallery = new LinearLayout(this);
     gallery.setOrientation(1);
@@ -1033,10 +1041,7 @@ public class MainActivity extends Activity {
         size.setMargins(dp(4), dp(4), dp(4), dp(4));
         row.addView(tile, size);
         FrameLayout preview = new FrameLayout(this);
-        if (n < 5)
-          preview.setBackground(
-              new GradientDrawable(GradientDrawable.Orientation.TL_BR, palettes[n]));
-        else if (n < 9) preview.setBackground(new NightWallpaper(n - 5));
+        if (n < 9) preview.setBackgroundResource(staticWallpaperResource(n));
         else {
           preview.setBackgroundColor(0xff252c35);
           String path = p.getString("wallpaper", "");
@@ -1065,7 +1070,7 @@ public class MainActivity extends Activity {
         tile.addView(label, new LinearLayout.LayoutParams(-1, dp(28)));
         tile.setOnClickListener(
             v -> {
-              if (n == 5) {
+              if (n == 9) {
                 try {
                   startActivityForResult(
                       new Intent(Intent.ACTION_OPEN_DOCUMENT)
@@ -1237,6 +1242,7 @@ public class MainActivity extends Activity {
   }
 
   protected void onDestroy() {
+    if (memoryIndicator != null) memoryIndicator.stop();
     stopTonePreview();
     cancelLaunch();
     networkWorker.shutdownNow();
@@ -1374,11 +1380,11 @@ public class MainActivity extends Activity {
 
   void background(FrameLayout root) {
     if (p.getBoolean("paper_theme", false)) {
-      root.setBackgroundColor(0xffe5e2d9);
+      root.setBackgroundColor(p.getBoolean("paper_dark", false) ? Color.BLACK : 0xffe5e2d9);
       return;
     }
     int b = p.getInt("background", 0);
-    root.setBackgroundColor(b == 1 ? Color.WHITE : Color.BLACK);
+    root.setBackgroundResource(staticWallpaperResource(b));
     String uri = p.getString("wallpaper", "");
     if (!uri.isEmpty()) {
       try {
@@ -1404,17 +1410,16 @@ public class MainActivity extends Activity {
         p.edit().remove("wallpaper").apply();
         Toast.makeText(this, "壁纸不可用，已恢复背景", 0).show();
       }
-    } else if (b >= 5) {
-      root.setBackground(new NightWallpaper(b - 5));
-    } else if (b >= 2) {
-      int[][] colors = {
-        {0xff010604, 0xff102a21, 0xff020705},
-        {0xff03040a, 0xff1a1730, 0xff030710},
-        {0xff010707, 0xff103034, 0xff020508}
-      };
-      root.setBackground(
-          new GradientDrawable(GradientDrawable.Orientation.TL_BR, colors[Math.min(b - 2, 2)]));
     }
+  }
+
+  int staticWallpaperResource(int index) {
+    int safe = index >= 0 && index <= 8 ? index : 0;
+    return getResources().getIdentifier("wallpaper_static_" + safe, "drawable", getPackageName());
+  }
+
+  boolean lightPaper() {
+    return p != null && p.getBoolean("paper_theme", false) && !p.getBoolean("paper_dark", false);
   }
 
   protected void onActivityResult(int r, int c, Intent data) {
@@ -1734,7 +1739,7 @@ public class MainActivity extends Activity {
     detailPage("需检测代理的应用（点击切换）");
     EditText search = new EditText(this);
     search.setSingleLine();
-    search.setTextColor(p.getBoolean("paper_theme", false) ? 0xff252525 : Color.WHITE);
+    search.setTextColor(lightPaper() ? 0xff252525 : 0xffcccccc);
     search.setHintTextColor(0xff919cab);
     search.setHint("搜索已安装应用（新安装的应用也会自动出现在此）");
     settingsContent.addView(search);
@@ -1786,7 +1791,7 @@ public class MainActivity extends Activity {
             TextView title = new TextView(MainActivity.this);
             title.setText(app.loadLabel(getPackageManager()).toString());
             title.setTextSize(16);
-            title.setTextColor(p.getBoolean("paper_theme", false) ? 0xff252525 : Color.WHITE);
+            title.setTextColor(lightPaper() ? 0xff252525 : 0xffcccccc);
             col.addView(title);
             TextView sub = new TextView(MainActivity.this);
             sub.setText(pkg);
