@@ -1,5 +1,7 @@
 # Project context and iteration guide
 
+[简体中文](PROJECT_CONTEXT.zh-CN.md)
+
 Implementation baseline: v1.7.0. This document describes the shipped code, not a promise about future third-party app versions.
 
 ## Purpose and operating environment
@@ -103,7 +105,7 @@ The v1.7.0 device checks cover voice target isolation/current labels, process-st
 4. Keep launch cancellation, bounded traversal, finite retries and already-active detection. Preserve the separate behavior of each adapter unless the change is intentional.
 5. Check cold start, warm start, already-in-call behavior, rotation and interrupted launch. Verify GPT, Doubao and Gemini after shared voice-flow changes. End test sessions after verification.
 6. Update backup validation for new settings, preserve existing user preferences, and release listeners/timers on lifecycle exit.
-7. Keep both READMEs synchronized. Follow [CONTRIBUTING.md](../CONTRIBUTING.md) and [AGENTS.md](../AGENTS.md). Never commit keys, tool caches, APKs, phone logs or backups.
+7. Read and follow [CONTRIBUTING.md](../CONTRIBUTING.md) and [AGENTS.md](../AGENTS.md) before development. Keep both READMEs and all English/Chinese documentation pairs synchronized in the same commit. Never commit keys, tool caches, APKs, phone logs or backups.
 8. Build with the existing signing key, increment version identifiers consistently, verify APK signing, and publish APKs as Release assets rather than source files. On Windows, the older resource packager may require an ASCII drive mapping for a non-ASCII checkout path.
 
 Do not silently describe an intended design as implemented behavior. Update this context when matching rules or supported targets change.

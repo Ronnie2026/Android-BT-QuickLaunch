@@ -1,5 +1,7 @@
 # Architecture
 
+[简体中文](ARCHITECTURE.zh-CN.md)
+
 All code lives in `launcher-app/src/com/benbenyu/btquicklaunch`.
 
 | Class | Role |

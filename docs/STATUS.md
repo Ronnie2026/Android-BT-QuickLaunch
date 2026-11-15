@@ -1,5 +1,7 @@
 # Project status
 
+[简体中文](STATUS.zh-CN.md)
+
 Version 1.7.0, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
 
 ## v1.7.0 validation

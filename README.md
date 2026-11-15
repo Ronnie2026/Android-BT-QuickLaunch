@@ -4,6 +4,10 @@
 
 A minimal Android home screen (launcher) that turns a **Bluetooth keyboard / keypad** into a hardware shortcut panel for launching the apps you choose.
 
+Reuse a **second-hand Android phone or spare smartphone** as an **in-car AI voice terminal**: Bluetooth keyboard shortcuts provide one-button app launch and automatic voice entry for ChatGPT, Gemini and Doubao. The phone acts as a client for AI assistants and Agent workflows; this launcher does not itself run an autonomous Agent.
+
+中文场景关键词：二手手机、旧手机再利用、蓝牙键盘、小键盘、一键启动、车载桌面、语音助手、AI Agent 终端。
+
 ## Background
 
 Old Android phones are cheap, capable and usually sit in a drawer. This project turns one into a **smart in-car terminal** for voice chat and AI-agent use: a dedicated device ("an agent's agent client") that you control with a few physical buttons instead of a touchscreen while driving.
@@ -70,6 +74,15 @@ Then enable the accessibility service, pair the keyboard, and optionally install
 ## Repository layout
 
 For project background, actual button-recognition rules, reliability limits and iteration guidance, read [Project context](docs/PROJECT_CONTEXT.md). Current matching uses accessibility resource IDs **and descriptions**, not OCR or fixed-coordinate recognition; visible node text is not currently used by the voice matcher.
+
+Before development, read [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md), then project context, architecture and status. English is the default; each document has a separate Simplified Chinese counterpart and both must be updated in the same commit.
+
+| Documentation | English (default) | 简体中文 |
+|---|---|---|
+| Project context and iteration | [EN](docs/PROJECT_CONTEXT.md) | [CN](docs/PROJECT_CONTEXT.zh-CN.md) |
+| Architecture | [EN](docs/ARCHITECTURE.md) | [CN](docs/ARCHITECTURE.zh-CN.md) |
+| Status and validation | [EN](docs/STATUS.md) | [CN](docs/STATUS.zh-CN.md) |
+| Offline reminders | [EN](docs/VOICE_ALERTS.md) | [CN](docs/VOICE_ALERTS.zh-CN.md) |
 
 | Path | Content |
 |---|---|

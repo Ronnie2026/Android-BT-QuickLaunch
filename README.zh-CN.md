@@ -4,6 +4,10 @@
 
 一个极简的 Android 桌面（Launcher），让**蓝牙键盘 / 小键盘**变成实体快捷键，一键唤起你指定的应用。
 
+把**二手安卓手机或闲置旧手机**改造成**车载 AI 语音终端**：通过蓝牙键盘快捷键一键启动应用，并自动进入 ChatGPT、Gemini 和豆包的语音入口。手机是 AI 助手与 Agent 工作流的客户端；本桌面自身不运行自主 Agent。
+
+English search terms: second-hand Android phone, spare smartphone, phone reuse, Bluetooth keyboard, keypad shortcuts, one-button app launch, car launcher, voice assistant, AI Agent terminal.
+
 ## 项目背景
 
 废旧安卓手机便宜、性能够用，却常年躺在抽屉里。本项目把它改造成**新时代智能车载终端**，用于语音聊天和 AI Agent 场景：一台专属的"Agent 的 Agent 客户端"，驾驶时不用点屏幕，只靠几个实体按键操作。
@@ -69,7 +73,16 @@ adb shell cmd package set-home-activity com.benbenyu.btquicklaunch/.MainActivity
 
 ## 目录结构
 
-项目背景、按钮识别的实际规则、可靠性边界和后续迭代说明见[项目知识背景](docs/PROJECT_CONTEXT.md)。当前使用无障碍资源 ID **及无障碍描述**识别，不使用 OCR 或固定坐标识别；语音按钮匹配目前没有读取控件可见文字。这里的“无障碍 ID／控件 ID”指同一类资源标识，不是两套识别方式。
+项目背景、按钮识别的实际规则、可靠性边界和后续迭代说明见[项目知识背景](docs/PROJECT_CONTEXT.zh-CN.md)。当前使用无障碍资源 ID **及无障碍描述**识别，不使用 OCR 或固定坐标识别；语音按钮匹配目前没有读取控件可见文字。这里的“无障碍 ID／控件 ID”指同一类资源标识，不是两套识别方式。
+
+开发前必须阅读 [AGENTS.md](AGENTS.md) 和 [CONTRIBUTING.md](CONTRIBUTING.md)，再阅读项目背景、架构及状态。文档默认英文，各有独立简体中文版，两种语言必须在同一提交同步更新。
+
+| 文档 | English（默认） | 简体中文 |
+|---|---|---|
+| 项目背景与迭代指南 | [EN](docs/PROJECT_CONTEXT.md) | [CN](docs/PROJECT_CONTEXT.zh-CN.md) |
+| 架构 | [EN](docs/ARCHITECTURE.md) | [CN](docs/ARCHITECTURE.zh-CN.md) |
+| 状态与验证 | [EN](docs/STATUS.md) | [CN](docs/STATUS.zh-CN.md) |
+| 离线提醒 | [EN](docs/VOICE_ALERTS.md) | [CN](docs/VOICE_ALERTS.zh-CN.md) |
 
 | 路径 | 内容 |
 |---|---|

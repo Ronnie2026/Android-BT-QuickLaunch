@@ -1,5 +1,7 @@
 # Offline reminders
 
+[简体中文](VOICE_ALERTS.zh-CN.md)
+
 All four WAV clips are bundled in `launcher-app/assets/`. They were synthesized locally with the Windows Microsoft Huihui Desktop Chinese voice. Playback needs neither an Android TTS engine nor network access.
 
 | Asset | Spoken text |
