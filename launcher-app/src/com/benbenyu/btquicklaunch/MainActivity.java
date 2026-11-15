@@ -236,6 +236,9 @@ public class MainActivity extends Activity {
             800);
       } else if (b == null) ensureProxyOnStart();
     }
+    if (b == null && p.getBoolean(AppUpdater.PREF_AUTO_CHECK, true)) {
+      h.postDelayed(() -> AppUpdater.autoCheckIfDue(this, p), 6000);
+    }
   }
 
   public void onBackPressed() {}
@@ -839,6 +842,108 @@ public class MainActivity extends Activity {
     body.addView(netCard);
     body.addView(
         IosUi.footer(this, "默认支持 ChatGPT / Grok / Gemini，仅在本地检测 VPN 隧道与端口，不发起外网请求。", paper));
+
+    body.addView(IosUi.header(this, "软件更新", paper));
+    LinearLayout updateCard = IosUi.card(this, paper);
+    updateCard.addView(
+        IosUi.switchRow(
+            this,
+            "启动时自动检查更新",
+            p.getBoolean(AppUpdater.PREF_AUTO_CHECK, true),
+            paper,
+            null,
+            (v, on) -> p.edit().putBoolean(AppUpdater.PREF_AUTO_CHECK, on).apply()));
+    updateCard.addView(IosUi.divider(this, paper));
+    updateCard.addView(
+        IosUi.disclosureRow(
+            this,
+            "立即检查更新",
+            "当前 v" + AppUpdater.currentVersion(this),
+            paper,
+            true,
+            () -> AppUpdater.check(this, p, false)));
+    updateCard.addView(IosUi.divider(this, paper));
+    String curMirror = p.getString(AppUpdater.PREF_MIRROR, "");
+    LinearLayout mirrorRow =
+        IosUi.disclosureRow(
+            this,
+            "下载镜像加速",
+            curMirror.isEmpty() ? "直连 GitHub" : curMirror,
+            paper,
+            false,
+            () -> {});
+    TextView mirrorVal = (TextView) mirrorRow.getChildAt(1);
+    mirrorRow.setOnClickListener(
+        v -> {
+          EditText input = new EditText(this);
+          input.setSingleLine();
+          input.setHint("留空为直连 GitHub，例如 https://gh-proxy.com/");
+          input.setText(p.getString(AppUpdater.PREF_MIRROR, ""));
+          new AlertDialog.Builder(this)
+              .setTitle("APK 下载镜像前缀")
+              .setMessage("开启 VPN 时建议留空直连 GitHub；如无代理可填写 GitHub 下载加速前缀。")
+              .setView(input)
+              .setPositiveButton(
+                  "保存",
+                  (d, w) -> {
+                    String val = input.getText().toString().trim();
+                    p.edit().putString(AppUpdater.PREF_MIRROR, val).apply();
+                    mirrorVal.setText(val.isEmpty() ? "直连 GitHub" : val);
+                  })
+              .setNeutralButton(
+                  "恢复直连",
+                  (d, w) -> {
+                    p.edit().remove(AppUpdater.PREF_MIRROR).apply();
+                    mirrorVal.setText("直连 GitHub");
+                  })
+              .setNegativeButton("取消", null)
+              .show();
+        });
+    updateCard.addView(mirrorRow);
+    updateCard.addView(IosUi.divider(this, paper));
+    LinearLayout giteeRow =
+        IosUi.disclosureRow(
+            this,
+            "Gitee 优先仓库",
+            AppUpdater.giteeRepo(p),
+            paper,
+            false,
+            () -> {});
+    TextView giteeVal = (TextView) giteeRow.getChildAt(1);
+    giteeRow.setOnClickListener(
+        v -> {
+          EditText input = new EditText(this);
+          input.setSingleLine();
+          input.setHint(AppUpdater.DEFAULT_GITEE_REPO);
+          input.setText(AppUpdater.giteeRepo(p));
+          new AlertDialog.Builder(this)
+              .setTitle("Gitee 优先仓库（owner/repo）")
+              .setMessage("国内网络优先从该 Gitee 仓库的 Releases 检测并下载；失败时自动切换至 GitHub 备用源。")
+              .setView(input)
+              .setPositiveButton(
+                  "保存",
+                  (d, w) -> {
+                    String val = input.getText().toString().trim();
+                    if (val.isEmpty()) p.edit().remove(AppUpdater.PREF_GITEE_REPO).apply();
+                    else p.edit().putString(AppUpdater.PREF_GITEE_REPO, val).apply();
+                    giteeVal.setText(AppUpdater.giteeRepo(p));
+                  })
+              .setNeutralButton(
+                  "恢复默认",
+                  (d, w) -> {
+                    p.edit().remove(AppUpdater.PREF_GITEE_REPO).apply();
+                    giteeVal.setText(AppUpdater.DEFAULT_GITEE_REPO);
+                  })
+              .setNegativeButton("取消", null)
+              .show();
+        });
+    updateCard.addView(giteeRow);
+    body.addView(updateCard);
+    body.addView(
+        IosUi.footer(
+            this,
+            "优先从 Gitee Releases 检测并下载（免代理），失败时自动切换至 GitHub Releases 备用源。",
+            paper));
 
     body.addView(IosUi.header(this, "系统与备份", paper));
     LinearLayout sysCard = IosUi.card(this, paper);
