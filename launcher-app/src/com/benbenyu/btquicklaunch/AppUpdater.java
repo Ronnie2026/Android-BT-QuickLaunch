@@ -28,7 +28,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
- * Checks Gitee Releases (primary) and GitHub Releases (fallback) for newer APKs, downloads them,
+ * Checks GitHub Releases (primary) and Gitee Releases (fallback) for newer APKs, downloads them,
  * and invokes the system installer.
  */
 public class AppUpdater {
@@ -81,7 +81,7 @@ public class AppUpdater {
     int m = sourceMode(p);
     if (m == SOURCE_GITEE) return "仅 Gitee";
     if (m == SOURCE_GITHUB) return "仅 GitHub";
-    return "自动（Gitee 优先）";
+    return "自动（GitHub 优先）";
   }
 
   static String giteeRepo(SharedPreferences p) {
@@ -108,7 +108,7 @@ public class AppUpdater {
             ? "正在从 Gitee 检测最新版本…"
             : mode == SOURCE_GITHUB
                 ? "正在从 GitHub 检测最新版本…"
-                : "正在检测最新版本（优先 Gitee，备用 GitHub）…";
+                : "正在检测最新版本（优先 GitHub，备用 Gitee）…";
     AlertDialog checkingDialog =
         silent
             ? null
@@ -234,27 +234,29 @@ public class AppUpdater {
               } catch (Exception primaryErr) {
                 if (cancelled.get()) {
                   error = "已取消下载";
-                } else if ("Gitee".equals(release.source) && sourceMode(p) == SOURCE_AUTO) {
-                  // Gitee download failed; automatically fall back to GitHub Releases.
+                } else if ("GitHub".equals(release.source) && sourceMode(p) == SOURCE_AUTO) {
+                  // GitHub download failed; automatically fall back to Gitee Releases.
                   act.runOnUiThread(
                       () -> {
                         if (!act.isDestroyed() && !act.isFinishing()) {
                           bar.setIndeterminate(true);
-                          status.setText("Gitee 下载失败，正在切换 GitHub 备用源…");
+                          status.setText("GitHub 下载失败，正在切换 Gitee 备用源…");
                         }
                       });
                   try {
-                    ReleaseInfo gh = fetchReleaseFromApi(GITHUB_RELEASES_API, "GitHub", true);
-                    if (compareVersions(gh.version, currentVersion(act)) <= 0) {
-                      throw new IllegalStateException("GitHub 暂无可升级版本");
+                    String giteeApi =
+                        "https://gitee.com/api/v5/repos/" + giteeRepo(p) + "/releases/latest";
+                    ReleaseInfo gitee = fetchReleaseFromApi(giteeApi, "Gitee", false);
+                    if (compareVersions(gitee.version, currentVersion(act)) <= 0) {
+                      throw new IllegalStateException("Gitee 暂无可升级版本");
                     }
-                    downloadApkToCache(act, p, gh, cancelled, bar, status);
-                  } catch (Exception ghErr) {
+                    downloadApkToCache(act, p, gitee, cancelled, bar, status);
+                  } catch (Exception giteeErr) {
                     error =
-                        "Gitee："
+                        "GitHub："
                             + msgOf(primaryErr)
-                            + "\nGitHub 备用："
-                            + msgOf(ghErr);
+                            + "\nGitee 备用："
+                            + msgOf(giteeErr);
                   }
                 } else {
                   error = msgOf(primaryErr);
@@ -415,16 +417,16 @@ public class AppUpdater {
     if (mode == SOURCE_GITHUB) {
       return fetchReleaseFromApi(GITHUB_RELEASES_API, "GitHub", true);
     }
-    Exception giteeErr;
-    try {
-      return fetchReleaseFromApi(giteeApi, "Gitee", false);
-    } catch (Exception e) {
-      giteeErr = e;
-    }
+    Exception ghErr;
     try {
       return fetchReleaseFromApi(GITHUB_RELEASES_API, "GitHub", true);
-    } catch (Exception ghErr) {
-      throw new IllegalStateException("Gitee：" + msgOf(giteeErr) + "\nGitHub：" + msgOf(ghErr));
+    } catch (Exception e) {
+      ghErr = e;
+    }
+    try {
+      return fetchReleaseFromApi(giteeApi, "Gitee", false);
+    } catch (Exception giteeErr) {
+      throw new IllegalStateException("GitHub：" + msgOf(ghErr) + "\nGitee：" + msgOf(giteeErr));
     }
   }
 

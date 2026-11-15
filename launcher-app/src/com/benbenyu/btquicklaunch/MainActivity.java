@@ -873,9 +873,9 @@ public class MainActivity extends Activity {
             () -> {});
     TextView sourceVal = (TextView) sourceRow.getChildAt(1);
     String[] sourceChoices = {
-      "自动（优先 Gitee，备用 GitHub）",
-      "仅使用 Gitee（国内直连）",
-      "仅使用 GitHub（直连）"
+      "自动（优先 GitHub，备用 Gitee）",
+      "仅使用 Gitee（低频备用源）",
+      "仅使用 GitHub（推荐）"
     };
     sourceRow.setOnClickListener(
         v ->
@@ -896,7 +896,7 @@ public class MainActivity extends Activity {
     body.addView(
         IosUi.footer(
             this,
-            "自动模式会优先从 Gitee Releases 检测并下载（免代理），失败时自动切换至 GitHub Releases 备用源；也可一键切换指定源。",
+            "自动模式会优先从 GitHub Releases 检测并下载，失败时自动切换至 Gitee 备用源；也可一键切换指定源。",
             paper));
 
     body.addView(IosUi.header(this, "系统与备份", paper));
