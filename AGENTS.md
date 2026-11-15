@@ -18,3 +18,14 @@
 
 - Never commit `.keys/`, `.tools/`, `*.jks`, APKs, or phone logs/backups.
 - Package name is `com.benbenyu.btquicklaunch`; keyboard address lives in `DeviceConfig.java`.
+- **Privacy:** All commits and tags must use `Ronnie2026@users.noreply.github.com` (never commit personal emails).
+
+## Dual-remote & release synchronization (GitHub + Gitee)
+
+- This repository maintains two remotes: `origin` (GitHub) and `gitee` (Gitee).
+- **Code & tag sync is mandatory:** Whenever commits or tags are pushed to `origin`, push the same branch and tags to `gitee` (`git push gitee main --tags`) so both repositories remain identical.
+- **Release sync is mandatory:** In-app auto-update (`AppUpdater.java`) checks **Gitee Releases first** and falls back to **GitHub Releases**. Whenever releasing a new version (`vX.Y.Z`):
+  1. Bump `android:versionCode` and `android:versionName` in `launcher-app/AndroidManifest.xml`.
+  2. Build and sign `dist\BT-QuickLaunch-vX.Y.Z.apk` locally via `build-home.ps1` (must use the existing `.keys\btquicklaunch.jks` signing key).
+  3. Push `main` and annotated tag `vX.Y.Z` to **both** `origin` and `gitee`.
+  4. Publish the `vX.Y.Z` Release **with `dist\BT-QuickLaunch-vX.Y.Z.apk` attached** on **both** GitHub Releases and Gitee Releases (you can run `.\release.ps1` to automate steps 2–4).
