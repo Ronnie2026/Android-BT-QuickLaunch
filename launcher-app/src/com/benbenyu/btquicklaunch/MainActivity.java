@@ -863,86 +863,40 @@ public class MainActivity extends Activity {
             true,
             () -> AppUpdater.check(this, p, false)));
     updateCard.addView(IosUi.divider(this, paper));
-    String curMirror = p.getString(AppUpdater.PREF_MIRROR, "");
-    LinearLayout mirrorRow =
+    LinearLayout sourceRow =
         IosUi.disclosureRow(
             this,
-            "下载镜像加速",
-            curMirror.isEmpty() ? "直连 GitHub" : curMirror,
+            "更新下载源",
+            AppUpdater.sourceLabel(p),
             paper,
             false,
             () -> {});
-    TextView mirrorVal = (TextView) mirrorRow.getChildAt(1);
-    mirrorRow.setOnClickListener(
-        v -> {
-          EditText input = new EditText(this);
-          input.setSingleLine();
-          input.setHint("留空为直连 GitHub，例如 https://gh-proxy.com/");
-          input.setText(p.getString(AppUpdater.PREF_MIRROR, ""));
-          new AlertDialog.Builder(this)
-              .setTitle("APK 下载镜像前缀")
-              .setMessage("开启 VPN 时建议留空直连 GitHub；如无代理可填写 GitHub 下载加速前缀。")
-              .setView(input)
-              .setPositiveButton(
-                  "保存",
-                  (d, w) -> {
-                    String val = input.getText().toString().trim();
-                    p.edit().putString(AppUpdater.PREF_MIRROR, val).apply();
-                    mirrorVal.setText(val.isEmpty() ? "直连 GitHub" : val);
-                  })
-              .setNeutralButton(
-                  "恢复直连",
-                  (d, w) -> {
-                    p.edit().remove(AppUpdater.PREF_MIRROR).apply();
-                    mirrorVal.setText("直连 GitHub");
-                  })
-              .setNegativeButton("取消", null)
-              .show();
-        });
-    updateCard.addView(mirrorRow);
-    updateCard.addView(IosUi.divider(this, paper));
-    LinearLayout giteeRow =
-        IosUi.disclosureRow(
-            this,
-            "Gitee 优先仓库",
-            AppUpdater.giteeRepo(p),
-            paper,
-            false,
-            () -> {});
-    TextView giteeVal = (TextView) giteeRow.getChildAt(1);
-    giteeRow.setOnClickListener(
-        v -> {
-          EditText input = new EditText(this);
-          input.setSingleLine();
-          input.setHint(AppUpdater.DEFAULT_GITEE_REPO);
-          input.setText(AppUpdater.giteeRepo(p));
-          new AlertDialog.Builder(this)
-              .setTitle("Gitee 优先仓库（owner/repo）")
-              .setMessage("国内网络优先从该 Gitee 仓库的 Releases 检测并下载；失败时自动切换至 GitHub 备用源。")
-              .setView(input)
-              .setPositiveButton(
-                  "保存",
-                  (d, w) -> {
-                    String val = input.getText().toString().trim();
-                    if (val.isEmpty()) p.edit().remove(AppUpdater.PREF_GITEE_REPO).apply();
-                    else p.edit().putString(AppUpdater.PREF_GITEE_REPO, val).apply();
-                    giteeVal.setText(AppUpdater.giteeRepo(p));
-                  })
-              .setNeutralButton(
-                  "恢复默认",
-                  (d, w) -> {
-                    p.edit().remove(AppUpdater.PREF_GITEE_REPO).apply();
-                    giteeVal.setText(AppUpdater.DEFAULT_GITEE_REPO);
-                  })
-              .setNegativeButton("取消", null)
-              .show();
-        });
-    updateCard.addView(giteeRow);
+    TextView sourceVal = (TextView) sourceRow.getChildAt(1);
+    String[] sourceChoices = {
+      "自动（优先 Gitee，备用 GitHub）",
+      "仅使用 Gitee（国内直连）",
+      "仅使用 GitHub（直连）"
+    };
+    sourceRow.setOnClickListener(
+        v ->
+            new AlertDialog.Builder(this)
+                .setTitle("选择更新下载源")
+                .setSingleChoiceItems(
+                    sourceChoices,
+                    AppUpdater.sourceMode(p),
+                    (dialog, which) -> {
+                      p.edit().putInt(AppUpdater.PREF_SOURCE_MODE, which).apply();
+                      sourceVal.setText(AppUpdater.sourceLabel(p));
+                      dialog.dismiss();
+                    })
+                .setNegativeButton("取消", null)
+                .show());
+    updateCard.addView(sourceRow);
     body.addView(updateCard);
     body.addView(
         IosUi.footer(
             this,
-            "优先从 Gitee Releases 检测并下载（免代理），失败时自动切换至 GitHub Releases 备用源。",
+            "自动模式会优先从 Gitee Releases 检测并下载（免代理），失败时自动切换至 GitHub Releases 备用源；也可一键切换指定源。",
             paper));
 
     body.addView(IosUi.header(this, "系统与备份", paper));

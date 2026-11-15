@@ -39,6 +39,10 @@ public class AppUpdater {
   static final String PREF_LAST_CHECK = "auto_update_last_check";
   static final String PREF_MIRROR = "update_mirror";
   static final String PREF_GITEE_REPO = "update_gitee_repo";
+  static final String PREF_SOURCE_MODE = "update_source_mode";
+  static final int SOURCE_AUTO = 0;
+  static final int SOURCE_GITEE = 1;
+  static final int SOURCE_GITHUB = 2;
   static final long AUTO_CHECK_INTERVAL_MS = 6L * 60L * 60L * 1000L;
 
   static final class ReleaseInfo {
@@ -67,6 +71,19 @@ public class AppUpdater {
     }
   }
 
+  static int sourceMode(SharedPreferences p) {
+    if (p == null) return SOURCE_AUTO;
+    int m = p.getInt(PREF_SOURCE_MODE, SOURCE_AUTO);
+    return (m >= SOURCE_AUTO && m <= SOURCE_GITHUB) ? m : SOURCE_AUTO;
+  }
+
+  static String sourceLabel(SharedPreferences p) {
+    int m = sourceMode(p);
+    if (m == SOURCE_GITEE) return "仅 Gitee";
+    if (m == SOURCE_GITHUB) return "仅 GitHub";
+    return "自动（Gitee 优先）";
+  }
+
   static String giteeRepo(SharedPreferences p) {
     if (p == null) return DEFAULT_GITEE_REPO;
     String repo = p.getString(PREF_GITEE_REPO, DEFAULT_GITEE_REPO).trim();
@@ -85,12 +102,19 @@ public class AppUpdater {
 
   static void check(Activity act, SharedPreferences p, boolean silent) {
     if (act == null || act.isDestroyed() || act.isFinishing()) return;
+    int mode = sourceMode(p);
+    String msg =
+        mode == SOURCE_GITEE
+            ? "正在从 Gitee 检测最新版本…"
+            : mode == SOURCE_GITHUB
+                ? "正在从 GitHub 检测最新版本…"
+                : "正在检测最新版本（优先 Gitee，备用 GitHub）…";
     AlertDialog checkingDialog =
         silent
             ? null
             : new AlertDialog.Builder(act)
                 .setTitle("检查更新")
-                .setMessage("正在检测最新版本（优先 Gitee，备用 GitHub）…")
+                .setMessage(msg)
                 .setCancelable(true)
                 .show();
     AtomicBoolean cancelled = new AtomicBoolean(false);
@@ -210,7 +234,7 @@ public class AppUpdater {
               } catch (Exception primaryErr) {
                 if (cancelled.get()) {
                   error = "已取消下载";
-                } else if ("Gitee".equals(release.source)) {
+                } else if ("Gitee".equals(release.source) && sourceMode(p) == SOURCE_AUTO) {
                   // Gitee download failed; automatically fall back to GitHub Releases.
                   act.runOnUiThread(
                       () -> {
@@ -383,7 +407,14 @@ public class AppUpdater {
   }
 
   private static ReleaseInfo fetchLatestWithFallback(SharedPreferences p) throws Exception {
+    int mode = sourceMode(p);
     String giteeApi = "https://gitee.com/api/v5/repos/" + giteeRepo(p) + "/releases/latest";
+    if (mode == SOURCE_GITEE) {
+      return fetchReleaseFromApi(giteeApi, "Gitee", false);
+    }
+    if (mode == SOURCE_GITHUB) {
+      return fetchReleaseFromApi(GITHUB_RELEASES_API, "GitHub", true);
+    }
     Exception giteeErr;
     try {
       return fetchReleaseFromApi(giteeApi, "Gitee", false);
