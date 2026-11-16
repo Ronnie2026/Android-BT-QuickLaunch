@@ -193,6 +193,7 @@ public class MainActivity extends Activity {
   android.content.SharedPreferences p;
   Handler h = new Handler();
   final java.util.concurrent.ThreadPoolExecutor networkWorker=new java.util.concurrent.ThreadPoolExecutor(1,1,0L,java.util.concurrent.TimeUnit.MILLISECONDS,new java.util.concurrent.ArrayBlockingQueue<Runnable>(1),new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
+  static final int REQ_PHONE_STATE_PERM = 101;
   int launchGeneration = 0;
   boolean cleaning = false;
   int queuedSlot = -1;
@@ -219,13 +220,33 @@ public class MainActivity extends Activity {
     if (b == null && p.getBoolean("disable_ime", true)) ImeGuard.apply(this, p, true, false);
     draw();
     if (getIntent().hasExtra("button_action")) button(getIntent());
-    else if (b == null) ensureProxyOnStart();
+    else if (b == null) {
+      ensureProxyOnStart();
+      ensurePhoneStatePermission();
+    }
     if (b == null && p.getBoolean(AppUpdater.PREF_AUTO_CHECK, true)) {
       h.postDelayed(() -> AppUpdater.autoCheckIfDue(this, p), 6000);
     }
   }
 
   public void onBackPressed() {}
+
+  void ensurePhoneStatePermission() {
+    if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE)
+        == PackageManager.PERMISSION_GRANTED) return;
+    if (p.getBoolean("asked_phone_state_perm", false)) return;
+    p.edit().putBoolean("asked_phone_state_perm", true).apply();
+    requestPermissions(
+        new String[] {android.Manifest.permission.READ_PHONE_STATE}, REQ_PHONE_STATE_PERM);
+  }
+
+  public void onRequestPermissionsResult(
+      int requestCode, String[] permissions, int[] grantResults) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    if (requestCode == REQ_PHONE_STATE_PERM && networkIndicators != null) {
+      networkIndicators.refreshFromPermission();
+    }
+  }
 
   protected void onNewIntent(Intent in) {
     super.onNewIntent(in);
