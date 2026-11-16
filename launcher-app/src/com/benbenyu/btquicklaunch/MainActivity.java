@@ -175,6 +175,7 @@ public class MainActivity extends Activity {
   protected void onPause() {
     stopTonePreview();
     clearCleanFeedback();
+    if (gearMenuDialog != null && gearMenuDialog.isShowing()) gearMenuDialog.dismiss();
     if(idlePower!=null)idlePower.stop();
     if (networkIndicators != null) networkIndicators.stop();
     if (memoryIndicator != null) memoryIndicator.stop();
@@ -369,7 +370,7 @@ public class MainActivity extends Activity {
     if (battery != null) batteryReceiver.onReceive(this, battery);
     updateBluetooth();
     View idleShade=new View(this);idleShade.setBackgroundColor(Color.BLACK);idleShade.setAlpha(0f);idleShade.setClickable(false);root.addView(idleShade,new FrameLayout.LayoutParams(-1,-1));if(idlePower==null)idlePower=new IdlePower(this);idlePower.attach(idleShade);
-    gear.setOnClickListener(v -> settingsPanel());
+    gear.setOnClickListener(v -> showGearMenu());
     if (desktopVisible) { statusHandler.removeCallbacks(statusTick); statusHandler.post(statusTick); }
     if (p.getBoolean("paper_theme", false)) {
       android.graphics.ColorMatrix gray = new android.graphics.ColorMatrix();
@@ -464,7 +465,62 @@ public class MainActivity extends Activity {
   }
 
   int settingsTab = 0;
-  Dialog settingsDialog;
+  Dialog settingsDialog, gearMenuDialog;
+
+  void showGearMenu() {
+    cancelLaunch();
+    if (gearMenuDialog != null && gearMenuDialog.isShowing()) gearMenuDialog.dismiss();
+    boolean paper = lightPaper();
+    Dialog d = new Dialog(this);
+    d.requestWindowFeature(Window.FEATURE_NO_TITLE);
+    d.setCanceledOnTouchOutside(true);
+    gearMenuDialog = d;
+
+    LinearLayout card = new LinearLayout(this);
+    card.setOrientation(LinearLayout.VERTICAL);
+    card.setBackground(IosUi.roundRect(IosUi.cardColor(paper), 14, this));
+    card.setMinimumWidth(dp(240));
+
+    String[] labels = {"系统经典桌面", "应用设置"};
+    int[] icons = {3, 2};
+    Runnable[] actions = {this::openClassicHome, this::settingsPanel};
+    for (int i = 0; i < labels.length; i++) {
+      if (i > 0) {
+        View div = new View(this);
+        div.setBackgroundColor(IosUi.dividerColor(paper));
+        card.addView(div, new LinearLayout.LayoutParams(-1, Math.max(1, dp(1))));
+      }
+      final Runnable action = actions[i];
+      LinearLayout row = new LinearLayout(this);
+      row.setGravity(Gravity.CENTER_VERTICAL);
+      row.setPadding(dp(18), dp(15), dp(22), dp(15));
+
+      StatusGlyph glyph = new StatusGlyph(this, icons[i]);
+      glyph.paper = paper;
+      LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(dp(22), dp(22));
+      gp.rightMargin = dp(12);
+      row.addView(glyph, gp);
+
+      TextView item = new TextView(this);
+      item.setText(labels[i]);
+      item.setTextSize(16);
+      item.setTextColor(IosUi.textPrimary(paper));
+      row.addView(item, new LinearLayout.LayoutParams(0, -2, 1f));
+
+      row.setOnClickListener(
+          v -> {
+            d.dismiss();
+            action.run();
+          });
+      card.addView(row, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    d.setContentView(card);
+    if (d.getWindow() != null) {
+      d.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+    }
+    d.show();
+  }
   LinearLayout settingsContent;
 
   void settingsPanel() {

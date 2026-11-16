@@ -56,6 +56,7 @@ English search terms: second-hand Android phone, spare smartphone, phone reuse, 
 - 无障碍服务用于读取键盘按键和识别 ChatGPT 语音按钮，ChatGPT 界面更新后可能需要适配
 - 键盘地址在 [`DeviceConfig.java`](launcher-app/src/com/benbenyu/btquicklaunch/DeviceConfig.java) 中设置，请改成你自己的键盘
 - 目前界面文字以中文为主，后续会做多语言
+- **中国广电（`46015`）SIM 卡提示**：较早的 Android 11 系统（含一加 7T）可能未内置广电 APN；若首页和系统均显示 4G 满格信号但移动数据无法上网，请在系统 **设置 -> 移动网络 -> 接入点名称 (APN)** 中手动新增（名称：`中国广电`，APN：`cbnet`，APN 类型：`default,supl`）并保存选中
 
 验证情况见 [docs/STATUS.md](docs/STATUS.md)。
 

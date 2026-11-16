@@ -16,9 +16,9 @@ public final class NetIndicatorsChecks {
     check("2G".equals(NetIndicators.mapNetworkType(TelephonyManager.NETWORK_TYPE_EDGE)), "EDGE maps to 2G");
     check("".equals(NetIndicators.mapNetworkType(TelephonyManager.NETWORK_TYPE_UNKNOWN)), "UNKNOWN maps to empty");
 
-    check("".equals(NetIndicators.resolveGeneration(null, false, "5G", true)), "out of service hides generation");
-    check("5G".equals(NetIndicators.resolveGeneration(null, true, "5G", false)), "display info generation preserved");
-    check("".equals(NetIndicators.resolveGeneration(null, true, "", false)), "missing permission without display info returns empty");
+    check("".equals(NetIndicators.resolveGeneration(null, null, false, "5G", true)), "out of service hides generation");
+    check("5G".equals(NetIndicators.resolveGeneration(null, null, true, "5G", false)), "display info generation preserved");
+    check("".equals(NetIndicators.resolveGeneration(null, null, true, "", false)), "missing permission without display info returns empty");
 
     System.out.println("PASS NetIndicators level clamping, network type mapping, and service gating");
   }

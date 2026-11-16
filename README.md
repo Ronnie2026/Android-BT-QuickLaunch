@@ -56,6 +56,7 @@ The phone runs this launcher as its default home screen. A paired Bluetooth keyp
 - The accessibility service is used to read key events from the keyboard and to find ChatGPT voice buttons, so ChatGPT UI updates may need adaptation
 - The keyboard address is set in [`DeviceConfig.java`](launcher-app/src/com/benbenyu/btquicklaunch/DeviceConfig.java); change it to your own keyboard
 - Most UI strings are currently Chinese; localization is planned
+- **China Broadnet (`46015`) SIM note**: Older Android 11 ROMs (including OnePlus 7T) may omit the built-in China Broadnet APN; if 4G bars show but mobile data stays disconnected, manually add an APN in Android **Settings -> Mobile network -> Access Point Names** (`Name: 中国广电`, `APN: cbnet`, `APN type: default,supl`) and select it
 
 See [docs/STATUS.md](docs/STATUS.md) for what has and has not been verified.
 

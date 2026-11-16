@@ -4,6 +4,13 @@
 
 版本 1.7.9，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
 
+## 未发布变更（工作区）
+- 改进 `NetIndicators`：在非飞行模式且检测到可用 SIM 卡时，持续展示蜂窝信号强度（0～4 格）与网络制式（`5G`/`4G`/`3G`/`2G`），支持与 Wi-Fi 共存以及纯数据域驻网（语音域 `OUT_OF_SERVICE` 但数据域 `IN_SERVICE`）。
+- 新增 Android 11 `TelephonyDisplayInfo`（5G NSA/SA）与 `ServiceState.getNetworkRegistrationInfoList()` 兜底、默认数据卡解析以及无服务 `×` 标记。
+- 在 `MainActivity` 中补充首次进入桌面时的 `READ_PHONE_STATE` 运行时权限申请及授权后即时刷新。
+- 将右上角设置齿轮的点击行为改为弹出带图标的 2 选 1 菜单（**系统经典桌面** / **应用设置**），方便快捷切换回系统经典桌面。
+- 新增 `NetIndicatorsChecks`（与 `ProcessStateChecks` 均通过）；已在一加 7T 真机（中国广电 `46015` 4G）验证信号格数与 `dumpsys telephony.registry` 一致（4/4 格），补充 `cbnet` APN 后实测 `ping` 平均延迟 33.0 ms、0% 丢包、下行约 2.78 MB/s。
+
 ## v1.7.9 更新说明
 
 - 将清理成功提示层文字改为英文 `Apps Cleared`。

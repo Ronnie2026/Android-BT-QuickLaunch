@@ -4,6 +4,13 @@
 
 Version 1.7.9, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
 
+## Unreleased (working tree)
+- Improved `NetIndicators` so cellular signal bars (0–4) and network generation (`5G`/`4G`/`3G`/`2G`) stay visible whenever a SIM is ready and airplane mode is off, including alongside Wi-Fi and on data-only registration (PS `IN_SERVICE` even when CS voice is `OUT_OF_SERVICE`).
+- Added Android 11 `TelephonyDisplayInfo` (5G NSA/SA) and `ServiceState.getNetworkRegistrationInfoList()` fallbacks, active default-data subscription resolution, and an out-of-service `×` indicator.
+- Added first-launch `READ_PHONE_STATE` runtime permission request and callback refresh in `MainActivity`.
+- Changed the top-right settings gear tap in `MainActivity` to open a 2-option menu with icons (**系统经典桌面** / **应用设置**) for quick access to the classic launcher.
+- Added `NetIndicatorsChecks` (passed alongside `ProcessStateChecks`); verified on OnePlus 7T (China Broadnet `46015` 4G, 4/4 bars matching `dumpsys telephony.registry`; after adding `cbnet` APN, `ping` avg 33.0 ms with 0% loss and ~2.78 MB/s HTTP download).
+
 ## v1.7.9 update
 - Updated cleanup success overlay caption to `Apps Cleared`.
 

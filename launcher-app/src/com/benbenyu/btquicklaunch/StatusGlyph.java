@@ -85,6 +85,21 @@ public class StatusGlyph extends View {
           canvas.drawRoundRect(23.7f, 24.5f - fillH, 28.3f, 24.5f, 0.8f, 0.8f, p);
         }
       }
+    } else if (type == 3) {
+      Path home = new Path();
+      home.moveTo(6f, 17f);
+      home.lineTo(18f, 7f);
+      home.lineTo(30f, 17f);
+      canvas.drawPath(home, p);
+      Path body = new Path();
+      body.moveTo(9.5f, 15.5f);
+      body.lineTo(9.5f, 28f);
+      body.lineTo(26.5f, 28f);
+      body.lineTo(26.5f, 15.5f);
+      canvas.drawPath(body, p);
+      canvas.drawLine(15.5f, 28f, 15.5f, 20.5f, p);
+      canvas.drawLine(15.5f, 20.5f, 20.5f, 20.5f, p);
+      canvas.drawLine(20.5f, 20.5f, 20.5f, 28f, p);
     } else {
       canvas.drawCircle(18f, 18f, 6.8f, p);
       canvas.drawCircle(18f, 18f, 2.6f, p);

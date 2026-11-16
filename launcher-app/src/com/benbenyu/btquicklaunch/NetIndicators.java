@@ -47,7 +47,7 @@ public class NetIndicators extends View {
         }
 
         public void onServiceStateChanged(ServiceState serviceState) {
-          inService = serviceState != null && serviceState.getState() == ServiceState.STATE_IN_SERVICE;
+          inService = isServiceInService(serviceState);
           if (!inService) {
             displayGeneration = "";
           }
@@ -220,16 +220,19 @@ public class NetIndicators extends View {
         } catch (Exception ignored) {
         }
       }
+      ServiceState activeServiceState = null;
       if (Build.VERSION.SDK_INT >= 26 && hasPhoneStatePermission()) {
         try {
-          ServiceState ss = activeTm.getServiceState();
-          if (ss != null) inService = ss.getState() == ServiceState.STATE_IN_SERVICE;
+          activeServiceState = activeTm.getServiceState();
+          if (activeServiceState != null) inService = isServiceInService(activeServiceState);
         } catch (Exception ignored) {
         }
       } else if (cellularConnected || level > 0) {
         inService = true;
       }
-      generation = resolveGeneration(activeTm, inService, displayGeneration, hasPhoneStatePermission());
+      generation =
+          resolveGeneration(
+              activeTm, activeServiceState, inService, displayGeneration, hasPhoneStatePermission());
     } else {
       inService = false;
       level = 0;
@@ -258,10 +261,45 @@ public class NetIndicators extends View {
     return Math.max(0, Math.min(4, raw));
   }
 
+  static boolean isServiceInService(ServiceState ss) {
+    if (ss == null) return false;
+    if (ss.getState() == ServiceState.STATE_IN_SERVICE) return true;
+    if (Build.VERSION.SDK_INT >= 30) {
+      try {
+        List<NetworkRegistrationInfo> infos = ss.getNetworkRegistrationInfoList();
+        if (infos != null) {
+          for (NetworkRegistrationInfo info : infos) {
+            if (info != null && info.isRegistered()) return true;
+          }
+        }
+      } catch (Exception ignored) {
+      }
+    }
+    return false;
+  }
+
   static String resolveGeneration(
-      TelephonyManager tm, boolean inService, String displayGen, boolean hasPermission) {
+      TelephonyManager tm,
+      ServiceState ss,
+      boolean inService,
+      String displayGen,
+      boolean hasPermission) {
     if (!inService) return "";
     if (displayGen != null && !displayGen.isEmpty()) return displayGen;
+    if (Build.VERSION.SDK_INT >= 30 && ss != null) {
+      try {
+        List<NetworkRegistrationInfo> infos = ss.getNetworkRegistrationInfoList();
+        if (infos != null) {
+          for (NetworkRegistrationInfo info : infos) {
+            if (info != null && info.isRegistered()) {
+              String psGen = mapNetworkType(info.getAccessNetworkTechnology());
+              if (!psGen.isEmpty()) return psGen;
+            }
+          }
+        }
+      } catch (Exception ignored) {
+      }
+    }
     if (tm == null || !hasPermission) return "";
     try {
       int dataType = tm.getDataNetworkType();
