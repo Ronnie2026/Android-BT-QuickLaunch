@@ -6,7 +6,7 @@ import android.view.View;
 
 public class StatusGlyph extends View {
   public int level = 0;
-  public boolean charging = false, connected = false, paper = false;
+  public boolean charging = false, connected = false, paper = false, showBattery = true;
   final int type;
   final Paint p = new Paint(3);
 
@@ -60,7 +60,7 @@ public class StatusGlyph extends View {
               ? (connected ? 0xff252525 : 0xff8a8a8a)
               : (connected ? 0xff63dba1 : 0xfff06b66);
       p.setColor(btColor);
-      boolean showBat = connected && level >= 0 && level <= 100;
+      boolean showBat = showBattery && connected && level >= 0 && level <= 100;
       float bx = showBat ? 11.5f : 18f;
       Path path = new Path();
       path.moveTo(bx, 8f);
@@ -100,6 +100,52 @@ public class StatusGlyph extends View {
       canvas.drawLine(15.5f, 28f, 15.5f, 20.5f, p);
       canvas.drawLine(15.5f, 20.5f, 20.5f, 20.5f, p);
       canvas.drawLine(20.5f, 20.5f, 20.5f, 28f, p);
+    } else if (type == 4) {
+      int vpnColor =
+          paper
+              ? (connected ? 0xff1e7e4f : 0xffc93b3b)
+              : (connected ? 0xff63dba1 : 0xfff06b66);
+      p.setColor(vpnColor);
+      Path shield = new Path();
+      shield.moveTo(18f, 6.5f);
+      shield.lineTo(28f, 10.5f);
+      shield.lineTo(28f, 17.5f);
+      shield.quadTo(28f, 25.5f, 18f, 29.5f);
+      shield.quadTo(8f, 25.5f, 8f, 17.5f);
+      shield.lineTo(8f, 10.5f);
+      shield.close();
+      canvas.drawPath(shield, p);
+      if (connected) {
+        canvas.drawLine(13.5f, 18.5f, 16.5f, 21.5f, p);
+        canvas.drawLine(16.5f, 21.5f, 22.8f, 14.5f, p);
+      } else {
+        canvas.drawLine(14.5f, 14.5f, 21.5f, 21.5f, p);
+        canvas.drawLine(21.5f, 14.5f, 14.5f, 21.5f, p);
+      }
+    } else if (type == 5) {
+      int accColor =
+          paper
+              ? (connected ? 0xff1e7e4f : 0xffc93b3b)
+              : (connected ? 0xff63dba1 : 0xfff06b66);
+      p.setColor(accColor);
+      canvas.drawCircle(18f, 18f, 11f, p);
+      p.setStyle(Paint.Style.FILL);
+      canvas.drawCircle(18f, 12.5f, 1.8f, p);
+      p.setStyle(Paint.Style.STROKE);
+      canvas.drawLine(12.5f, 16.5f, 23.5f, 16.5f, p);
+      canvas.drawLine(18f, 16.5f, 18f, 21f, p);
+      canvas.drawLine(18f, 21f, 14.5f, 25.5f, p);
+      canvas.drawLine(18f, 21f, 21.5f, 25.5f, p);
+    } else if (type == 6) {
+      int audioColor =
+          paper
+              ? (connected ? 0xff252525 : 0xff9a9a9a)
+              : (connected ? 0xff63dba1 : 0xff6d7684);
+      p.setColor(audioColor);
+      canvas.drawArc(9f, 9f, 27f, 27f, 180f, 180f, false, p);
+      p.setStyle(Paint.Style.FILL);
+      canvas.drawRoundRect(7.5f, 18f, 12f, 26f, 2f, 2f, p);
+      canvas.drawRoundRect(24f, 18f, 28.5f, 26f, 2f, 2f, p);
     } else {
       canvas.drawCircle(18f, 18f, 6.8f, p);
       canvas.drawCircle(18f, 18f, 2.6f, p);

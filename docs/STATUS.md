@@ -2,14 +2,18 @@
 
 [简体中文](STATUS.zh-CN.md)
 
-Version 1.7.9, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+Version 1.8.0, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
 
-## Unreleased (working tree)
+## v1.8.0 release summary
 - Improved `NetIndicators` so cellular signal bars (0–4) and network generation (`5G`/`4G`/`3G`/`2G`) stay visible whenever a SIM is ready and airplane mode is off, including alongside Wi-Fi and on data-only registration (PS `IN_SERVICE` even when CS voice is `OUT_OF_SERVICE`).
-- Added Android 11 `TelephonyDisplayInfo` (5G NSA/SA) and `ServiceState.getNetworkRegistrationInfoList()` fallbacks, active default-data subscription resolution, and an out-of-service `×` indicator.
+- Added Android 11 `TelephonyDisplayInfo` (5G NSA/SA) and `ServiceState.getNetworkRegistrationInfoList()` fallbacks, active default-data subscription resolution, an out-of-service `×` indicator, and live uplink/downlink traffic speed (`TrafficStats.getTotalTxBytes()` / `getTotalRxBytes()`, sampled every 1 s while visible).
 - Added first-launch `READ_PHONE_STATE` runtime permission request and callback refresh in `MainActivity`.
 - Changed the top-right settings gear tap in `MainActivity` to open a 2-option menu with icons (**系统经典桌面** / **应用设置**) for quick access to the classic launcher.
-- Added `NetIndicatorsChecks` (passed alongside `ProcessStateChecks`); verified on OnePlus 7T (China Broadnet `46015` 4G, 4/4 bars matching `dumpsys telephony.registry`; after adding `cbnet` APN, `ping` avg 33.0 ms with 0% loss and ~2.78 MB/s HTTP download).
+- Added `WifiBeaconGuard` and grouped power-saving strategies under **General Settings -> 省电策略**: (1) 2-minute idle dimming, and (2) Wi-Fi SSID beacon auto-sleep (60 s foreground Wi-Fi scan without connecting; selectable nearby SSID list; 2/3/5-minute timeout; 5-second countdown confirmation dialog before `KEYCODE_SLEEP`; non-intrusive during active media or recent interaction; preferences included in `ConfigBackup`).
+- Added `PowerIndicator` next to the battery icon to display live wattage (`W`), current (`mA`), voltage (`V`), and temperature (`°C` with ≥42.0 °C highlight), plus `PowerIndicatorChecks`.
+- Added top-right status badges for VPN/Clash readiness, `ButtonService` accessibility binding, and Bluetooth audio (`A2DP`/`SCO`) connection.
+- Added a **状态展示** section in General Settings with 11 toggle switches (`show_mobile_signal`, `show_wifi`, `show_net_speed`, `show_vpn_status`, `show_accessibility_status`, `show_bt_audio`, `show_bluetooth`, `show_hid_battery`, `show_power`, `show_temperature`, `show_memory`), stopping hidden indicators' polling and synced in `ConfigBackup`.
+- Added `WifiBeaconChecks` and `NetIndicatorsChecks` (passed alongside `ProcessStateChecks`); verified on OnePlus 7T (China Broadnet `46015` 4G, 4/4 bars matching `dumpsys telephony.registry`; after adding `cbnet` APN, `ping` avg 33.0 ms with 0% loss, ~2.78 MB/s HTTP download, and live `↑`/`↓` speed display confirmed via screenshot).
 
 ## v1.7.9 update
 - Updated cleanup success overlay caption to `Apps Cleared`.

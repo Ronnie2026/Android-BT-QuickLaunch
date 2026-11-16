@@ -12,10 +12,12 @@
 | `HidConnectionManager` | 处理 HID／ACL 广播和提醒音，每秒轮询状态，独立执行器回连 |
 | `RootHidProvider`／`RootHidConnect` | 受限 Root HID 连接桥接；Provider 不导出，并检查调用 UID |
 | `IdlePower` | 桌面空闲两分钟后调暗，触摸、HID 和媒体播放可重置 |
+| `WifiBeaconGuard` | 桌面每 60 秒扫描目标 Wi-Fi SSID 信标；连续超时未检测到时弹出 5 秒倒计时并调用 Root 熄屏休眠 |
 | `ImeGuard` | 禁用或恢复系统软键盘输入法，防止弹出键盘遮挡语音按钮 |
 | `IosUi` | 设置页 iOS 风格分组卡片、开关、跳转行、分割线与页脚说明 |
 | `CircularIconView` | 桌面与设置页应用图标的统一圆形遮罩视图 |
 | `MemoryIndicator` | 右上角整机内存芯片图标与占用比例显示 |
+| `PowerIndicator` | 右上角实时功耗（W）、电流（mA）与电压（V）显示，仅桌面可见时每 2 秒采样 |
 | `NightWallpaper` | 内置静态 XML 暗色与电子书壁纸 |
 | `NetIndicators`／`StatusGlyph` | Wi-Fi、移动网络、电量和蓝牙图标 |
 | `ReminderEvent`／`ReminderAudio` | 按事件定义的提醒规则、语音／提示音路由与摘要格式化 |

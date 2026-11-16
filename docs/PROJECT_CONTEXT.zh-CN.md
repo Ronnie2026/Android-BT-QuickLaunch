@@ -2,7 +2,7 @@
 
 [English (default)](PROJECT_CONTEXT.md)
 
-实现基线：v1.7.5。本文描述已发布代码，不承诺未来第三方应用版本始终兼容。
+实现基线：v1.8.0。本文描述已发布代码，不承诺未来第三方应用版本始终兼容。
 
 ## 项目目标与运行环境
 
@@ -76,7 +76,7 @@ ID 和描述属于可替代的匹配条件，不要求两者同时匹配。实�
 - 壁纸为内置静态 XML 资源，默认纯黑，可选用户图片。电子书主题覆盖壁纸：普通版使用纸张背景，黑色版使用纯黑和降低亮度的灰阶渲染。
 - 内存芯片显示 `ActivityManager.MemoryInfo` 提供的整机占用，计算为 `(totalMem - availMem) / totalMem`，不是本应用占用。可用内存包括可回收内存。桌面处于恢复状态且屏幕可交互时每 10 秒刷新，熄屏／暂停停止轮询。
 - `IdlePower` 在两分钟无操作后调暗桌面，并响应输入、播放等本地事件。静态资源和有限轮询减少不必要工作，不代表零内存或零功耗。
-- `NetIndicators` 在右上角状态栏展示 Wi-Fi 与蜂窝网络信号。只要未开启飞行模式且检测到就绪 SIM 卡（或存在已连接的蜂窝网络），即使同时连接 Wi-Fi 或处于纯数据域驻网（`NetworkRegistrationInfo.isRegistered()`），也会显示 0～4 格信号与制式（`5G`/`4G`/`3G`/`2G`）；无服务时显示 0 格灰柱与 `×` 标记。正常进入桌面时会请求一次 `READ_PHONE_STATE` 权限，用于在 Android 11+ 读取 `TelephonyDisplayInfo`（含 5G NSA）及默认数据卡状态。
+- `NetIndicators` 在右上角状态栏展示 Wi-Fi、蜂窝网络信号与实时上下行网速（`↑`/`↓`）。只要未开启飞行模式且检测到就绪 SIM 卡（或存在已连接的蜂窝网络），即使同时连接 Wi-Fi 或处于纯数据域驻网（`NetworkRegistrationInfo.isRegistered()`），也会显示 0～4 格信号与制式（`5G`/`4G`/`3G`/`2G`）；无服务时显示 0 格灰柱与 `×` 标记。实时网速直接调用 Android 系统底层的 `TrafficStats.getTotalTxBytes()` 与 `TrafficStats.getTotalRxBytes()`，仅在桌面处于前台（`start()`/`stop()`）时每秒采样一次，无需额外权限或 Root。正常进入桌面时会请求一次 `READ_PHONE_STATE` 权限，用于在 Android 11+ 读取 `TelephonyDisplayInfo`（含 5G NSA）及默认数据卡状态。
 - 在目标机型的 Android 11 原厂固件（一加 7T，系统数据库 `content://telephony/carriers`）中，已内置三大运营商配置，插卡默认即可使用：**中国联通（`46001`）** 内置 `3gnet`（`default,supl`）及 `ims`；**中国电信（`46003` / `46011`）** 内置 `ctnet`（`default,hipri,ia,supl`）及 `ims`；**中国移动（`46000`）** 内置 `cmnet`（`default,net,supl`）及 `ims`。由于该版系统固件发布早于中国广电（`46015`）2022 年正式放号，原厂 APN 与 IMS 表未收录 `46015`，容易出现 4G 满格但语音域 `OUT_OF_SERVICE`、数据拨号停在 `DATA_DISCONNECTED` 的情况；在系统“移动网络 -> 接入点名称 (APN)”中手动添加广电 APN（名称：`中国广电`，APN：`cbnet`，APN 类型：`default,supl`）并选中即可正常上网。
 
 卸载系统动态壁纸组件、安装防火墙等仅对测试手机的改动，不属于桌面源码功能，安装本 APK 不会自动复现。

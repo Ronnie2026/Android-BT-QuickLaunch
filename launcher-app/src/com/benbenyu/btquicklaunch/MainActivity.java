@@ -16,8 +16,11 @@ public class MainActivity extends Activity {
   OfflineVoiceAlerts voicePreview;
   final Handler feedbackHandler = new Handler();
   IdlePower idlePower;
+  WifiBeaconGuard wifiBeaconGuard;
+  Runnable pendingWifiBeaconAction;
   NetIndicators networkIndicators;
   MemoryIndicator memoryIndicator;
+  PowerIndicator powerIndicator;
   CircularIconView[] activityIcons = new CircularIconView[4];
   Handler statusHandler = new Handler();
   boolean desktopVisible = false, statusChecking = false, statusRefreshRequested = false;
@@ -60,10 +63,19 @@ public class MainActivity extends Activity {
               } catch (Exception ignored) {
               }
               final boolean ok = valid;
+              final ProxyGuard.Status proxyStatus =
+                  p.getBoolean("show_vpn_status", true) ? ProxyGuard.check(this, false) : null;
               statusHandler.post(
                   () -> {
                     statusChecking = false;
                     if (!desktopVisible) return;
+                    if (vpnIcon != null && proxyStatus != null) {
+                      boolean ready = proxyStatus.ready();
+                      vpnIcon.connected = ready;
+                      vpnIcon.invalidate();
+                      vpnIcon.setContentDescription(ready ? "VPN 代理已就绪" : "VPN 代理未就绪");
+                    }
+                    updateAccessibilityBadge();
                     for (int i = 0; i < 4; i++) {
                       if (!packages[i].equals(get(i, "pkg", pkgs[i]))) continue;
                       boolean active = false;
@@ -108,9 +120,59 @@ public class MainActivity extends Activity {
           batteryText.charging = charging;
           batteryText.invalidate();
           batteryText.setContentDescription("电量 " + percent + "%" + (charging ? "，正在充电" : ""));
+          int voltageMv = in.getIntExtra(android.os.BatteryManager.EXTRA_VOLTAGE, 0);
+          int tempDeciC = in.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, 0);
+          if (powerIndicator != null && (voltageMv > 0 || tempDeciC > 0)) {
+            powerIndicator.updateBattery(voltageMv, tempDeciC);
+          }
         }
       };
-  StatusGlyph bluetoothIcon;
+  StatusGlyph bluetoothIcon, vpnIcon, accessibilityIcon, btAudioIcon;
+  android.media.AudioManager audioManager;
+  boolean audioCallbackRegistered;
+  final android.media.AudioDeviceCallback audioDeviceCallback =
+      new android.media.AudioDeviceCallback() {
+        public void onAudioDevicesAdded(android.media.AudioDeviceInfo[] addedDevices) {
+          updateBluetoothAudio();
+        }
+
+        public void onAudioDevicesRemoved(android.media.AudioDeviceInfo[] removedDevices) {
+          updateBluetoothAudio();
+        }
+      };
+
+  void updateAccessibilityBadge() {
+    if (accessibilityIcon == null) return;
+    boolean bound = ButtonService.isBound(this);
+    accessibilityIcon.connected = bound;
+    accessibilityIcon.invalidate();
+    accessibilityIcon.setContentDescription(bound ? "按键无障碍服务已绑定" : "按键无障碍服务未绑定，点击设置");
+  }
+
+  void updateBluetoothAudio() {
+    if (btAudioIcon == null) return;
+    boolean connected = false;
+    try {
+      if (audioManager == null) {
+        audioManager = (android.media.AudioManager) getSystemService(AUDIO_SERVICE);
+      }
+      if (audioManager != null) {
+        for (android.media.AudioDeviceInfo info :
+            audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)) {
+          int type = info.getType();
+          if (type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+              || type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
+            connected = true;
+            break;
+          }
+        }
+      }
+    } catch (Exception ignored) {
+    }
+    btAudioIcon.connected = connected;
+    btAudioIcon.invalidate();
+    btAudioIcon.setContentDescription(connected ? "蓝牙音频已连接" : "蓝牙音频未连接");
+  }
   android.hardware.input.InputManager inputManager;
   final android.hardware.input.InputManager.InputDeviceListener deviceListener =
       new android.hardware.input.InputManager.InputDeviceListener() {
@@ -143,7 +205,9 @@ public class MainActivity extends Activity {
       }
     }
     bluetoothIcon.connected = connected;
+    bluetoothIcon.showBattery = p.getBoolean("show_hid_battery", true);
     bluetoothIcon.level = connected ? HidConnectionManager.batteryLevel : -1;
+    bluetoothIcon.setVisibility(p.getBoolean("show_bluetooth", true) ? View.VISIBLE : View.GONE);
     bluetoothIcon.invalidate();
     bluetoothIcon.setContentDescription(
         connected
@@ -155,8 +219,14 @@ public class MainActivity extends Activity {
   protected void onResume() {
     super.onResume();
     if(idlePower==null)idlePower=new IdlePower(this);idlePower.start();
+    if (wifiBeaconGuard == null) wifiBeaconGuard = new WifiBeaconGuard(this);
+    wifiBeaconGuard.start();
     if (networkIndicators != null) networkIndicators.start();
-    if (memoryIndicator != null) memoryIndicator.start();
+    if (memoryIndicator != null && p.getBoolean("show_memory", true)) memoryIndicator.start();
+    if (powerIndicator != null
+        && (p.getBoolean("show_power", true) || p.getBoolean("show_temperature", true))) {
+      powerIndicator.start();
+    }
     desktopVisible = true;
     statusHandler.removeCallbacks(statusTick);
     statusHandler.post(statusTick);
@@ -166,8 +236,15 @@ public class MainActivity extends Activity {
     }
     inputManager = (android.hardware.input.InputManager) getSystemService(INPUT_SERVICE);
     inputManager.registerInputDeviceListener(deviceListener, new Handler());
+    if (audioManager == null) audioManager = (android.media.AudioManager) getSystemService(AUDIO_SERVICE);
+    if (audioManager != null && !audioCallbackRegistered) {
+      audioManager.registerAudioDeviceCallback(audioDeviceCallback, h);
+      audioCallbackRegistered = true;
+    }
     HidConnectionManager.onStateChanged = () -> runOnUiThread(this::updateBluetooth);
     updateBluetooth();
+    updateBluetoothAudio();
+    updateAccessibilityBadge();
     getWindow().getDecorView().setSystemUiVisibility(5894);
     applyBrightness();
   }
@@ -177,8 +254,10 @@ public class MainActivity extends Activity {
     clearCleanFeedback();
     if (gearMenuDialog != null && gearMenuDialog.isShowing()) gearMenuDialog.dismiss();
     if(idlePower!=null)idlePower.stop();
+    if (wifiBeaconGuard != null) wifiBeaconGuard.stop();
     if (networkIndicators != null) networkIndicators.stop();
     if (memoryIndicator != null) memoryIndicator.stop();
+    if (powerIndicator != null) powerIndicator.stop();
     desktopVisible = false;
     for (CircularIconView icon : activityIcons) if (icon != null) icon.stopPulse();
     statusHandler.removeCallbacks(statusTick);
@@ -187,6 +266,10 @@ public class MainActivity extends Activity {
       batteryRegistered = false;
     }
     if (inputManager != null) inputManager.unregisterInputDeviceListener(deviceListener);
+    if (audioManager != null && audioCallbackRegistered) {
+      audioManager.unregisterAudioDeviceCallback(audioDeviceCallback);
+      audioCallbackRegistered = false;
+    }
     HidConnectionManager.onStateChanged = null;
     super.onPause();
   }
@@ -195,6 +278,7 @@ public class MainActivity extends Activity {
   Handler h = new Handler();
   final java.util.concurrent.ThreadPoolExecutor networkWorker=new java.util.concurrent.ThreadPoolExecutor(1,1,0L,java.util.concurrent.TimeUnit.MILLISECONDS,new java.util.concurrent.ArrayBlockingQueue<Runnable>(1),new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
   static final int REQ_PHONE_STATE_PERM = 101;
+  static final int REQ_WIFI_BEACON_LOCATION_PERM = 102;
   int launchGeneration = 0;
   boolean cleaning = false;
   int queuedSlot = -1;
@@ -232,6 +316,90 @@ public class MainActivity extends Activity {
 
   public void onBackPressed() {}
 
+  void ensureWifiBeaconLocationPermission(Runnable onGranted) {
+    if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
+        == PackageManager.PERMISSION_GRANTED) {
+      if (onGranted != null) onGranted.run();
+      return;
+    }
+    pendingWifiBeaconAction = onGranted;
+    requestPermissions(
+        new String[] {android.Manifest.permission.ACCESS_FINE_LOCATION},
+        REQ_WIFI_BEACON_LOCATION_PERM);
+  }
+
+  void pickWifiBeaconSsid(final TextView ssidVal) {
+    if (wifiBeaconGuard == null) wifiBeaconGuard = new WifiBeaconGuard(this);
+    if (!wifiBeaconGuard.isLocationEnabled()) {
+      Toast.makeText(this, "请先开启系统位置信息（定位）开关", 1).show();
+    }
+    List<String> ssids = wifiBeaconGuard.scanNearbySsids();
+    if (ssids.isEmpty()) {
+      showManualSsidDialog(ssidVal, "未扫描到附近 Wi-Fi（请确认热点已开启并打开系统定位），可手动输入：");
+      return;
+    }
+    String current = WifiBeaconGuard.normalizeSsid(p.getString(WifiBeaconGuard.PREF_SSID, ""));
+    int checked = ssids.indexOf(current);
+    final String[] items = ssids.toArray(new String[0]);
+    new AlertDialog.Builder(this)
+        .setTitle("选择附近 Wi-Fi 信标")
+        .setSingleChoiceItems(
+            items,
+            checked,
+            (d, which) -> {
+              String chosen = items[which];
+              p.edit().putString(WifiBeaconGuard.PREF_SSID, chosen).apply();
+              ssidVal.setText(chosen);
+              wifiBeaconGuard.resetTimer();
+              d.dismiss();
+            })
+        .setNeutralButton("手动输入", (d, w) -> showManualSsidDialog(ssidVal, "输入目标 Wi-Fi SSID："))
+        .setNegativeButton("取消", null)
+        .show();
+  }
+
+  void showManualSsidDialog(final TextView ssidVal, String message) {
+    final EditText input = new EditText(this);
+    input.setSingleLine(true);
+    input.setText(WifiBeaconGuard.normalizeSsid(p.getString(WifiBeaconGuard.PREF_SSID, "")));
+    input.setSelection(input.getText().length());
+    new AlertDialog.Builder(this)
+        .setTitle("目标 Wi-Fi SSID")
+        .setMessage(message)
+        .setView(input)
+        .setPositiveButton(
+            "保存",
+            (d, w) -> {
+              String next = WifiBeaconGuard.normalizeSsid(input.getText().toString());
+              p.edit().putString(WifiBeaconGuard.PREF_SSID, next).apply();
+              ssidVal.setText(next.isEmpty() ? "未选择" : next);
+              if (wifiBeaconGuard != null) wifiBeaconGuard.resetTimer();
+            })
+        .setNegativeButton("取消", null)
+        .show();
+  }
+
+  void pickWifiBeaconTimeout(final TextView timeoutVal) {
+    final int[] options = {2, 3, 5};
+    String[] labels = {"2 分钟", "3 分钟", "5 分钟"};
+    int cur = WifiBeaconGuard.clampTimeoutMinutes(p.getInt(WifiBeaconGuard.PREF_TIMEOUT_MIN, 3));
+    int checked = cur == 2 ? 0 : cur == 5 ? 2 : 1;
+    new AlertDialog.Builder(this)
+        .setTitle("离开超时")
+        .setSingleChoiceItems(
+            labels,
+            checked,
+            (d, which) -> {
+              int val = options[which];
+              p.edit().putInt(WifiBeaconGuard.PREF_TIMEOUT_MIN, val).apply();
+              timeoutVal.setText(val + " 分钟");
+              if (wifiBeaconGuard != null) wifiBeaconGuard.resetTimer();
+              d.dismiss();
+            })
+        .setNegativeButton("取消", null)
+        .show();
+  }
+
   void ensurePhoneStatePermission() {
     if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE)
         == PackageManager.PERMISSION_GRANTED) return;
@@ -246,6 +414,15 @@ public class MainActivity extends Activity {
     super.onRequestPermissionsResult(requestCode, permissions, grantResults);
     if (requestCode == REQ_PHONE_STATE_PERM && networkIndicators != null) {
       networkIndicators.refreshFromPermission();
+    } else if (requestCode == REQ_WIFI_BEACON_LOCATION_PERM) {
+      Runnable pending = pendingWifiBeaconAction;
+      pendingWifiBeaconAction = null;
+      if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+        if (wifiBeaconGuard != null) wifiBeaconGuard.resetTimer();
+        if (pending != null) pending.run();
+      } else {
+        Toast.makeText(this, "需要定位权限才能扫描附近 Wi-Fi SSID", 1).show();
+      }
     }
   }
 
@@ -339,11 +516,50 @@ public class MainActivity extends Activity {
 
     boolean paper = lightPaper();
     if (memoryIndicator != null) memoryIndicator.stop();
+    if (powerIndicator != null) powerIndicator.stop();
+    boolean showMemory = p.getBoolean("show_memory", true);
     memoryIndicator = new MemoryIndicator(this, paper);
+    memoryIndicator.setVisibility(showMemory ? View.VISIBLE : View.GONE);
     LinearLayout.LayoutParams memoryParams = new LinearLayout.LayoutParams(-2, dp(36));
     memoryParams.rightMargin = dp(8);
     statusBar.addView(memoryIndicator, memoryParams);
-    if (desktopVisible) memoryIndicator.start();
+    if (desktopVisible && showMemory) memoryIndicator.start();
+
+    vpnIcon = new StatusGlyph(this, 4);
+    vpnIcon.paper = paper;
+    vpnIcon.setVisibility(p.getBoolean("show_vpn_status", true) ? View.VISIBLE : View.GONE);
+    LinearLayout.LayoutParams vpnParams = new LinearLayout.LayoutParams(dp(30), dp(36));
+    vpnParams.rightMargin = dp(2);
+    statusBar.addView(vpnIcon, vpnParams);
+    vpnIcon.setOnClickListener(
+        v ->
+            Toast.makeText(
+                    this,
+                    vpnIcon.connected ? "VPN 代理已就绪" : "VPN 代理未连接，请在“通用设置”检测或启动 Clash",
+                    0)
+                .show());
+
+    accessibilityIcon = new StatusGlyph(this, 5);
+    accessibilityIcon.paper = paper;
+    accessibilityIcon.setVisibility(
+        p.getBoolean("show_accessibility_status", true) ? View.VISIBLE : View.GONE);
+    LinearLayout.LayoutParams accParams = new LinearLayout.LayoutParams(dp(30), dp(36));
+    accParams.rightMargin = dp(2);
+    statusBar.addView(accessibilityIcon, accParams);
+    accessibilityIcon.setOnClickListener(
+        v -> {
+          if (ButtonService.isBound(this)) {
+            Toast.makeText(this, "按键无障碍服务运行正常", 0).show();
+          } else {
+            try {
+              startActivity(
+                  new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                      .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            } catch (Exception ignored) {
+            }
+          }
+        });
+
     networkIndicators = new NetIndicators(this);
     statusBar.addView(networkIndicators, new LinearLayout.LayoutParams(0, dp(36)));
 
@@ -353,10 +569,29 @@ public class MainActivity extends Activity {
     batteryParams.leftMargin = dp(4);
     statusBar.addView(batteryText, batteryParams);
 
+    boolean showPower = p.getBoolean("show_power", true);
+    boolean showTemp = p.getBoolean("show_temperature", true);
+    powerIndicator = new PowerIndicator(this, paper);
+    powerIndicator.setDisplayOptions(showPower, showTemp);
+    LinearLayout.LayoutParams powerParams = new LinearLayout.LayoutParams(-2, dp(36));
+    powerParams.leftMargin = dp(2);
+    powerParams.rightMargin = dp(2);
+    statusBar.addView(powerIndicator, powerParams);
+    if (desktopVisible && (showPower || showTemp)) powerIndicator.start();
+
+    btAudioIcon = new StatusGlyph(this, 6);
+    btAudioIcon.paper = paper;
+    btAudioIcon.setVisibility(p.getBoolean("show_bt_audio", true) ? View.VISIBLE : View.GONE);
+    LinearLayout.LayoutParams audioParams = new LinearLayout.LayoutParams(dp(32), dp(36));
+    audioParams.leftMargin = dp(2);
+    statusBar.addView(btAudioIcon, audioParams);
+
     bluetoothIcon = new StatusGlyph(this, 1);
     bluetoothIcon.paper = paper;
+    bluetoothIcon.showBattery = p.getBoolean("show_hid_battery", true);
+    bluetoothIcon.setVisibility(p.getBoolean("show_bluetooth", true) ? View.VISIBLE : View.GONE);
     LinearLayout.LayoutParams btParams = new LinearLayout.LayoutParams(dp(36), dp(36));
-    btParams.leftMargin = dp(4);
+    btParams.leftMargin = dp(2);
     statusBar.addView(bluetoothIcon, btParams);
 
     StatusGlyph gear = new StatusGlyph(this, 2);
@@ -369,6 +604,8 @@ public class MainActivity extends Activity {
     Intent battery = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
     if (battery != null) batteryReceiver.onReceive(this, battery);
     updateBluetooth();
+    updateBluetoothAudio();
+    updateAccessibilityBadge();
     View idleShade=new View(this);idleShade.setBackgroundColor(Color.BLACK);idleShade.setAlpha(0f);idleShade.setClickable(false);root.addView(idleShade,new FrameLayout.LayoutParams(-1,-1));if(idlePower==null)idlePower=new IdlePower(this);idlePower.attach(idleShade);
     gear.setOnClickListener(v -> showGearMenu());
     if (desktopVisible) { statusHandler.removeCallbacks(statusTick); statusHandler.post(statusTick); }
@@ -752,21 +989,6 @@ public class MainActivity extends Activity {
     appCard.addView(
         IosUi.switchRow(
             this,
-            "2 分钟无操作自动调暗",
-            p.getBoolean("idle_power", true),
-            paper,
-            null,
-            (v, on) -> {
-              p.edit().putBoolean("idle_power", on).apply();
-              if (idlePower != null) {
-                idlePower.setDim(false);
-                idlePower.activity("setting");
-              }
-            }));
-    appCard.addView(IosUi.divider(this, paper));
-    appCard.addView(
-        IosUi.switchRow(
-            this,
             "后台活跃图标呼吸动画",
             p.getBoolean("breathing", true),
             paper,
@@ -815,6 +1037,95 @@ public class MainActivity extends Activity {
     appCard.addView(brightRow);
     body.addView(appCard);
     body.addView(IosUi.footer(this, "图标橙色圆环表示应用后台运行中；灰色圆环表示检测失败；没有圆环表示未运行。状态按应用包名匹配，交换位置后仍会跟随应用。", paper));
+
+    body.addView(IosUi.header(this, "省电策略", paper));
+    LinearLayout beaconCard = IosUi.card(this, paper);
+    beaconCard.addView(
+        IosUi.switchRow(
+            this,
+            "1. 无动静 2 分钟屏幕变暗",
+            p.getBoolean("idle_power", true),
+            paper,
+            null,
+            (v, on) -> {
+              p.edit().putBoolean("idle_power", on).apply();
+              if (idlePower != null) {
+                idlePower.setDim(false);
+                idlePower.activity("setting");
+              }
+            }));
+    beaconCard.addView(IosUi.divider(this, paper));
+    beaconCard.addView(
+        IosUi.switchRow(
+            this,
+            "2. Wi-Fi 离开自动锁屏休眠",
+            p.getBoolean(WifiBeaconGuard.PREF_ENABLED, false),
+            paper,
+            null,
+            (v, on) -> {
+              p.edit().putBoolean(WifiBeaconGuard.PREF_ENABLED, on).apply();
+              if (wifiBeaconGuard != null) wifiBeaconGuard.resetTimer();
+              if (on) {
+                ensureWifiBeaconLocationPermission(null);
+                if (wifiBeaconGuard != null && !wifiBeaconGuard.isLocationEnabled()) {
+                  Toast.makeText(this, "请开启系统定位开关，否则无法扫描附近 Wi-Fi", 1).show();
+                }
+              }
+            }));
+    beaconCard.addView(IosUi.divider(this, paper));
+    String savedSsid = WifiBeaconGuard.normalizeSsid(p.getString(WifiBeaconGuard.PREF_SSID, ""));
+    LinearLayout ssidRow =
+        IosUi.disclosureRow(
+            this, "目标 Wi-Fi SSID", savedSsid.isEmpty() ? "未选择" : savedSsid, paper, false, () -> {});
+    TextView ssidVal = (TextView) ssidRow.getChildAt(1);
+    ssidRow.setOnClickListener(v -> ensureWifiBeaconLocationPermission(() -> pickWifiBeaconSsid(ssidVal)));
+    beaconCard.addView(ssidRow);
+    beaconCard.addView(IosUi.divider(this, paper));
+    int savedTimeout = WifiBeaconGuard.clampTimeoutMinutes(p.getInt(WifiBeaconGuard.PREF_TIMEOUT_MIN, 3));
+    LinearLayout timeoutRow =
+        IosUi.disclosureRow(this, "离开超时", savedTimeout + " 分钟", paper, false, () -> {});
+    TextView timeoutVal = (TextView) timeoutRow.getChildAt(1);
+    timeoutRow.setOnClickListener(v -> pickWifiBeaconTimeout(timeoutVal));
+    beaconCard.addView(timeoutRow);
+    body.addView(beaconCard);
+    body.addView(
+        IosUi.footer(
+            this,
+            "策略 1 会在无操作 2 分钟后调暗桌面；策略 2 每 60 秒扫描附近 Wi-Fi（无需连接），连续超时未检测到目标 SSID 且无媒体播放或近期操作时，先弹出 5 秒倒计时询问，无响应则自动熄屏进入深度休眠；按蓝牙键盘快捷键可随时唤醒。",
+            paper));
+
+    body.addView(IosUi.header(this, "状态展示", paper));
+    LinearLayout statusCard = IosUi.card(this, paper);
+    String[][] statusItems = {
+      {"show_mobile_signal", "显示移动网络信号"},
+      {"show_wifi", "显示 Wi-Fi"},
+      {"show_net_speed", "显示上行下行速度"},
+      {"show_vpn_status", "显示 VPN 代理状态"},
+      {"show_accessibility_status", "显示按键服务状态"},
+      {"show_bt_audio", "显示蓝牙音频连接"},
+      {"show_bluetooth", "显示蓝牙"},
+      {"show_hid_battery", "显示 HID 蓝牙与电量"},
+      {"show_power", "显示功耗"},
+      {"show_temperature", "显示电池温度"},
+      {"show_memory", "显示内存占用"}
+    };
+    for (int idx = 0; idx < statusItems.length; idx++) {
+      if (idx > 0) statusCard.addView(IosUi.divider(this, paper));
+      final String key = statusItems[idx][0];
+      statusCard.addView(
+          IosUi.switchRow(
+              this,
+              statusItems[idx][1],
+              p.getBoolean(key, true),
+              paper,
+              null,
+              (v, on) -> {
+                p.edit().putBoolean(key, on).apply();
+                draw();
+              }));
+    }
+    body.addView(statusCard);
+    body.addView(IosUi.footer(this, "关闭不需要的状态展示项可减少状态栏占用与对应轮询开销。", paper));
 
     body.addView(IosUi.header(this, "输入法与语音", paper));
     LinearLayout imeCard = IosUi.card(this, paper);
@@ -1364,6 +1675,7 @@ public class MainActivity extends Activity {
 
   protected void onDestroy() {
     if (memoryIndicator != null) memoryIndicator.stop();
+    if (powerIndicator != null) powerIndicator.stop();
     stopTonePreview();
     cancelLaunch();
     networkWorker.shutdownNow();

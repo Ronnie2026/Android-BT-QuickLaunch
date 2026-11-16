@@ -20,7 +20,16 @@ public final class NetIndicatorsChecks {
     check("5G".equals(NetIndicators.resolveGeneration(null, null, true, "5G", false)), "display info generation preserved");
     check("".equals(NetIndicators.resolveGeneration(null, null, true, "", false)), "missing permission without display info returns empty");
 
-    System.out.println("PASS NetIndicators level clamping, network type mapping, and service gating");
+    check(NetIndicators.computeRatePerSec(-1L, 1000L, 1000L) == 0L, "negative baseline returns zero");
+    check(NetIndicators.computeRatePerSec(2000L, 1000L, 1000L) == 0L, "counter reset returns zero");
+    check(NetIndicators.computeRatePerSec(1000L, 3048L, 1000L) == 2048L, "compute bytes per second");
+    check("0B/s".equals(NetIndicators.formatSpeed(0L)), "format zero speed");
+    check("512B/s".equals(NetIndicators.formatSpeed(512L)), "format byte speed");
+    check("1.5K/s".equals(NetIndicators.formatSpeed(1536L)), "format low KB speed");
+    check("256K/s".equals(NetIndicators.formatSpeed(256L * 1024L)), "format high KB speed");
+    check("2.5M/s".equals(NetIndicators.formatSpeed(2560L * 1024L)), "format MB speed");
+
+    System.out.println("PASS NetIndicators level clamping, network type mapping, service gating, and traffic speed");
   }
 
   static void check(boolean value, String message) {

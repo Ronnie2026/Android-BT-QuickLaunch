@@ -2,14 +2,18 @@
 
 [English (default)](STATUS.md)
 
-版本 1.7.9，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+版本 1.8.0，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
 
-## 未发布变更（工作区）
+## v1.8.0 封版说明
 - 改进 `NetIndicators`：在非飞行模式且检测到可用 SIM 卡时，持续展示蜂窝信号强度（0～4 格）与网络制式（`5G`/`4G`/`3G`/`2G`），支持与 Wi-Fi 共存以及纯数据域驻网（语音域 `OUT_OF_SERVICE` 但数据域 `IN_SERVICE`）。
-- 新增 Android 11 `TelephonyDisplayInfo`（5G NSA/SA）与 `ServiceState.getNetworkRegistrationInfoList()` 兜底、默认数据卡解析以及无服务 `×` 标记。
+- 新增 Android 11 `TelephonyDisplayInfo`（5G NSA/SA）与 `ServiceState.getNetworkRegistrationInfoList()` 兜底、默认数据卡解析、无服务 `×` 标记，以及基于系统底层 `TrafficStats` 的实时上下行网速显示（桌面可见时每秒采样刷新）。
 - 在 `MainActivity` 中补充首次进入桌面时的 `READ_PHONE_STATE` 运行时权限申请及授权后即时刷新。
 - 将右上角设置齿轮的点击行为改为弹出带图标的 2 选 1 菜单（**系统经典桌面** / **应用设置**），方便快捷切换回系统经典桌面。
-- 新增 `NetIndicatorsChecks`（与 `ProcessStateChecks` 均通过）；已在一加 7T 真机（中国广电 `46015` 4G）验证信号格数与 `dumpsys telephony.registry` 一致（4/4 格），补充 `cbnet` APN 后实测 `ping` 平均延迟 33.0 ms、0% 丢包、下行约 2.78 MB/s。
+- 新增 `WifiBeaconGuard`，并在 **通用设置 -> 省电策略** 下整合两条策略：（1）无动静 2 分钟屏幕变暗；（2）Wi-Fi 离开自动锁屏休眠（桌面每 60 秒扫描附近 SSID，无需连接；支持从附近 Wi-Fi 列表点选；支持 2/3/5 分钟超时；超时且无媒体播放或近期操作时先弹出 5 秒倒计时确认，无响应再执行 `KEYCODE_SLEEP`；相关设置已接入 `ConfigBackup`）。
+- 在电池图标旁新增 `PowerIndicator`，支持显示实时功耗（`W`）、电流（`mA`）、电压（`V`）与电池温度（`°C`，≥42.0°C 高温变色提醒），并补充 `PowerIndicatorChecks`。
+- 新增右上角 VPN/Clash 代理状态、无障碍按键服务绑定状态以及蓝牙音频（`A2DP`/`SCO`）连接状态图标。
+- 在 **通用设置 -> 状态展示** 中新增 11 项独立开关（移动网络信号、Wi-Fi、上行下行速度、VPN 代理、按键服务、蓝牙音频、蓝牙、HID 蓝牙与电量、功耗、电池温度、内存占用），关闭后同步停止对应轮询并已接入 `ConfigBackup`。
+- 新增 `WifiBeaconChecks` 与 `NetIndicatorsChecks`（与 `ProcessStateChecks` 均通过）；已在一加 7T 真机（中国广电 `46015` 4G）验证信号格数与 `dumpsys telephony.registry` 一致（4/4 格），补充 `cbnet` APN 后实测 `ping` 平均延迟 33.0 ms、0% 丢包、下行约 2.78 MB/s，并截图确认实时 `↑`/`↓` 网速显示正常。
 
 ## v1.7.9 更新说明
 

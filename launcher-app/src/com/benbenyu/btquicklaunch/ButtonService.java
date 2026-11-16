@@ -102,6 +102,11 @@ public class ButtonService extends AccessibilityService {
           battery.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0);
   }
 
+  public boolean onUnbind(Intent intent) {
+    if (instance == this) instance = null;
+    return super.onUnbind(intent);
+  }
+
   public void onDestroy() {
     cancelVoice();
     if(hid!=null)hid.stop();
@@ -109,6 +114,30 @@ public class ButtonService extends AccessibilityService {
     instance = null;
     if (bluetoothEvents != null) unregisterReceiver(bluetoothEvents);
     super.onDestroy();
+  }
+
+  static boolean isBound(android.content.Context c) {
+    if (instance == null) return false;
+    try {
+      android.view.accessibility.AccessibilityManager am =
+          (android.view.accessibility.AccessibilityManager)
+              c.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE);
+      if (am == null) return true;
+      java.util.List<android.accessibilityservice.AccessibilityServiceInfo> list =
+          am.getEnabledAccessibilityServiceList(
+              android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK);
+      String pkg = c.getPackageName();
+      for (android.accessibilityservice.AccessibilityServiceInfo info : list) {
+        if (info.getResolveInfo() != null
+            && info.getResolveInfo().serviceInfo != null
+            && pkg.equals(info.getResolveInfo().serviceInfo.packageName)) {
+          return true;
+        }
+      }
+      return false;
+    } catch (Exception ignored) {
+      return instance != null;
+    }
   }
 
   int visited;

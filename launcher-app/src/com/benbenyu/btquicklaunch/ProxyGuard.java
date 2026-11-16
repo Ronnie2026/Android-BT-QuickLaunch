@@ -80,12 +80,16 @@ final class ProxyGuard {
 
   /** Local-only check (no external HTTPS requests); safe to call from a worker thread. */
   static Status check(Context c) {
+    return check(c, true);
+  }
+
+  static Status check(Context c, boolean log) {
     Status s = new Status();
     s.baseNetwork = baseNetwork(c);
     s.tunnel = tunnelUp(c);
     s.localPort = localPortOpen();
     s.clashProcess = s.tunnel && s.localPort || clashProcess();
-    AppLog.write("PROXY_CHECK " + s.summary(), null);
+    if (log) AppLog.write("PROXY_CHECK " + s.summary(), null);
     return s;
   }
 

@@ -72,13 +72,13 @@ final class ConfigBackup {
     while (keys.hasNext()) {
       String key = keys.next();
       if (!key.matches(
-          "[0-3](name|pkg|before|delay|voice|icon)|background|wallpaper|brightness|breathing|paper_theme|paper_dark|idle_power|proxy_guard|proxy_on_boot|proxy_apps|disable_ime|bt_connect_sound|reminder_enabled|reminder_media|reminder_keyboard_connected|reminder_keyboard_disconnected|reminder_keyboard_low|reminder_phone_low|clean_success_sound|clean_success_tone|reminder_tone|reminder_(keyboard_(connected|disconnected|low)|phone_low)_(media|tone)"))
+          "[0-3](name|pkg|before|delay|voice|icon)|background|wallpaper|brightness|breathing|paper_theme|paper_dark|idle_power|wifi_beacon_sleep|wifi_beacon_ssid|wifi_beacon_timeout|show_mobile_signal|show_wifi|show_bluetooth|show_hid_battery|show_power|show_net_speed|show_memory|show_vpn_status|show_accessibility_status|show_bt_audio|show_temperature|proxy_guard|proxy_on_boot|proxy_apps|disable_ime|bt_connect_sound|reminder_enabled|reminder_media|reminder_keyboard_connected|reminder_keyboard_disconnected|reminder_keyboard_low|reminder_phone_low|clean_success_sound|clean_success_tone|reminder_tone|reminder_(keyboard_(connected|disconnected|low)|phone_low)_(media|tone)"))
         continue;
       Object value = j.get(key);
       boolean boolKey =
-          key.matches("reminder_(enabled|keyboard_connected|keyboard_disconnected|keyboard_low|phone_low)") || key.equals("clean_success_sound") || key.endsWith("voice") || (key.equals("proxy_guard") || key.equals("proxy_on_boot")) || key.equals("breathing") || key.equals("paper_theme") || key.equals("paper_dark") || key.equals("idle_power") || key.equals("disable_ime") || key.equals("bt_connect_sound");
+          key.matches("reminder_(enabled|keyboard_connected|keyboard_disconnected|keyboard_low|phone_low)|show_(mobile_signal|wifi|bluetooth|hid_battery|power|net_speed|memory|vpn_status|accessibility_status|bt_audio|temperature)") || key.equals("clean_success_sound") || key.endsWith("voice") || (key.equals("proxy_guard") || key.equals("proxy_on_boot")) || key.equals("breathing") || key.equals("paper_theme") || key.equals("paper_dark") || key.equals("idle_power") || key.equals("wifi_beacon_sleep") || key.equals("disable_ime") || key.equals("bt_connect_sound");
       boolean intKey =
-          key.endsWith("delay") || key.equals("background") || key.equals("brightness");
+          key.endsWith("delay") || key.equals("background") || key.equals("brightness") || key.equals("wifi_beacon_timeout");
       if (boolKey && !(value instanceof Boolean)
           || intKey && !(value instanceof Integer)
           || (!boolKey && !intKey && !(value instanceof String))) throw new IOException("配置字段类型无效");
@@ -88,6 +88,7 @@ final class ConfigBackup {
         throw new IOException("Invalid reminder media");
       if (key.equals("background") && ((Integer) value < 0 || (Integer) value > 8)
           || key.equals("brightness") && ((Integer) value < 0 || (Integer) value > 100)
+          || key.equals("wifi_beacon_timeout") && ((Integer) value < 1 || (Integer) value > 30)
           || key.endsWith("delay") && ((Integer) value < 1000 || (Integer) value > 10000))
         throw new IOException("配置数值超出范围");
       if (value instanceof String && value.toString().length() > 1024)

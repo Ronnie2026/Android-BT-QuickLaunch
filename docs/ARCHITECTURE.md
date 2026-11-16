@@ -12,10 +12,12 @@ All code lives in `launcher-app/src/com/benbenyu/btquicklaunch`.
 | `HidConnectionManager` | Handles HID/ACL broadcasts and notification sounds, polls state every second, and reconnects on a separate executor |
 | `RootHidProvider` / `RootHidConnect` | Restricted root bridge that performs the HID connect; provider is not exported and checks caller UID |
 | `IdlePower` | Dims the home window after 2 minutes idle; resets on touch, HID, media playback |
+| `WifiBeaconGuard` | Foreground 60 s Wi-Fi SSID beacon watcher; shows a 5-second countdown and sleeps via Root when absent past timeout |
 | `ImeGuard` | Disables/restores system soft keyboards so IME popups do not block voice controls |
 | `IosUi` | iOS-style grouped cards, switches, disclosure rows, dividers, and footers for Settings |
 | `CircularIconView` | Uniform circular display mask for home and settings app icons |
 | `MemoryIndicator` | Top-right whole-device RAM usage chip icon and percentage indicator |
+| `PowerIndicator` | Top-right battery wattage, current (mA), and voltage (V) indicator sampled every 2 seconds while foregrounded |
 | `NightWallpaper` | Bundled static XML dark and e-book wallpapers |
 | `NetIndicators` / `StatusGlyph` | Wi-Fi / mobile / battery / Bluetooth status icons |
 | `ReminderEvent` / `ReminderAudio` | Per-event reminder definitions, sound/voice routing, and summary formatting |

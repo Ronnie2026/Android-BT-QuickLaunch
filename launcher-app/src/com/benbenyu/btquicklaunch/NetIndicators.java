@@ -10,19 +10,37 @@ import android.provider.Settings;
 import android.telephony.*;
 import android.view.*;
 import java.util.List;
+import java.util.Locale;
 
 public class NetIndicators extends View {
+  static final long SPEED_INTERVAL_MS = 1000L;
+  static final int SPEED_SLOT_DP = 54;
   final ConnectivityManager cm;
   final TelephonyManager tm;
   final SubscriptionManager sm;
   final Handler handler = new Handler(Looper.getMainLooper());
   final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
   TelephonyManager activeTm;
+  int activeSubId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+  int lastLayoutWidth = -1;
   int registeredListenFlags = PhoneStateListener.LISTEN_NONE;
   boolean wifi, mobile, started, inService;
   int level = 0;
   String generation = "";
   String displayGeneration = "";
+  long lastRxBytes = -1L;
+  long lastTxBytes = -1L;
+  long lastSpeedAtMs = 0L;
+  long rxBytesPerSec = 0L;
+  long txBytesPerSec = 0L;
+  final Runnable speedTick =
+      new Runnable() {
+        public void run() {
+          if (!started) return;
+          sampleTrafficSpeed();
+          handler.postDelayed(this, SPEED_INTERVAL_MS);
+        }
+      };
 
   final ConnectivityManager.NetworkCallback callback =
       new ConnectivityManager.NetworkCallback() {
@@ -51,12 +69,21 @@ public class NetIndicators extends View {
           if (!inService) {
             displayGeneration = "";
           }
-          handler.post(() -> refresh());
+          generation =
+              resolveGeneration(
+                  activeTm, serviceState, inService, displayGeneration, hasPhoneStatePermission());
+          invalidate();
         }
 
         public void onDisplayInfoChanged(TelephonyDisplayInfo displayInfo) {
-          displayGeneration = mapDisplayInfo(displayInfo);
-          handler.post(() -> refresh());
+          String nextGen = mapDisplayInfo(displayInfo);
+          if (!nextGen.equals(displayGeneration)) {
+            displayGeneration = nextGen;
+            if (inService) {
+              generation = nextGen.isEmpty() ? generation : nextGen;
+              invalidate();
+            }
+          }
         }
       };
 
@@ -72,16 +99,28 @@ public class NetIndicators extends View {
   public void start() {
     if (started) return;
     started = true;
-    try {
-      cm.registerNetworkCallback(
-          new NetworkRequest.Builder()
-              .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-              .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
-              .build(),
-          callback);
-    } catch (Exception ignored) {
+    SharedPreferences prefs = getContext().getSharedPreferences("home", 0);
+    boolean showWifi = prefs.getBoolean("show_wifi", true);
+    boolean showMobile = prefs.getBoolean("show_mobile_signal", true);
+    boolean showSpeed = prefs.getBoolean("show_net_speed", true);
+    if (!showWifi && !showMobile && !showSpeed) return;
+    if (showWifi || showMobile || showSpeed) {
+      try {
+        cm.registerNetworkCallback(
+            new NetworkRequest.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
+                .build(),
+            callback);
+      } catch (Exception ignored) {
+      }
     }
-    registerPhoneListener();
+    if (showMobile) registerPhoneListener();
+    if (showSpeed) {
+      resetSpeedSample();
+      handler.removeCallbacks(speedTick);
+      handler.postDelayed(speedTick, SPEED_INTERVAL_MS);
+    }
     refresh();
   }
 
@@ -93,6 +132,59 @@ public class NetIndicators extends View {
     }
     unregisterPhoneListener();
     handler.removeCallbacksAndMessages(null);
+    lastRxBytes = -1L;
+    lastTxBytes = -1L;
+    lastSpeedAtMs = 0L;
+    rxBytesPerSec = 0L;
+    txBytesPerSec = 0L;
+  }
+
+  void resetSpeedSample() {
+    long rx = TrafficStats.getTotalRxBytes();
+    long tx = TrafficStats.getTotalTxBytes();
+    lastRxBytes = rx >= 0 ? rx : -1L;
+    lastTxBytes = tx >= 0 ? tx : -1L;
+    lastSpeedAtMs = SystemClock.elapsedRealtime();
+    rxBytesPerSec = 0L;
+    txBytesPerSec = 0L;
+  }
+
+  void sampleTrafficSpeed() {
+    long nowMs = SystemClock.elapsedRealtime();
+    long rx = TrafficStats.getTotalRxBytes();
+    long tx = TrafficStats.getTotalTxBytes();
+    if (rx < 0 || tx < 0) {
+      rxBytesPerSec = 0L;
+      txBytesPerSec = 0L;
+      lastRxBytes = -1L;
+      lastTxBytes = -1L;
+      lastSpeedAtMs = nowMs;
+      return;
+    }
+    if (lastRxBytes >= 0 && lastTxBytes >= 0 && nowMs > lastSpeedAtMs) {
+      long elapsedMs = nowMs - lastSpeedAtMs;
+      rxBytesPerSec = computeRatePerSec(lastRxBytes, rx, elapsedMs);
+      txBytesPerSec = computeRatePerSec(lastTxBytes, tx, elapsedMs);
+      if (wifi || mobile) invalidate();
+    }
+    lastRxBytes = rx;
+    lastTxBytes = tx;
+    lastSpeedAtMs = nowMs;
+  }
+
+  static long computeRatePerSec(long prevBytes, long currBytes, long elapsedMs) {
+    if (prevBytes < 0 || currBytes < prevBytes || elapsedMs <= 0) return 0L;
+    return (currBytes - prevBytes) * 1000L / elapsedMs;
+  }
+
+  static String formatSpeed(long bytesPerSec) {
+    long v = Math.max(0L, bytesPerSec);
+    if (v < 1024L) return v + "B/s";
+    double kb = v / 1024.0;
+    if (kb < 100.0) return String.format(Locale.US, "%.1fK/s", kb);
+    if (kb < 1024.0) return String.format(Locale.US, "%.0fK/s", kb);
+    double mb = kb / 1024.0;
+    return String.format(Locale.US, "%.1fM/s", mb);
   }
 
   public void refreshFromPermission() {
@@ -103,7 +195,14 @@ public class NetIndicators extends View {
   }
 
   void registerPhoneListener() {
-    activeTm = resolveActiveTelephonyManager();
+    int subId = resolveActiveSubId();
+    activeSubId = subId;
+    if (tm != null && subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+      TelephonyManager subTm = tm.createForSubscriptionId(subId);
+      activeTm = subTm != null ? subTm : tm;
+    } else {
+      activeTm = tm;
+    }
     if (activeTm == null) return;
     int flags =
         PhoneStateListener.LISTEN_SIGNAL_STRENGTHS | PhoneStateListener.LISTEN_SERVICE_STATE;
@@ -140,8 +239,7 @@ public class NetIndicators extends View {
         == PackageManager.PERMISSION_GRANTED;
   }
 
-  TelephonyManager resolveActiveTelephonyManager() {
-    if (tm == null) return null;
+  int resolveActiveSubId() {
     if (sm != null && hasPhoneStatePermission()) {
       try {
         int subId = SubscriptionManager.getDefaultDataSubscriptionId();
@@ -149,14 +247,11 @@ public class NetIndicators extends View {
           List<SubscriptionInfo> list = sm.getActiveSubscriptionInfoList();
           if (list != null && !list.isEmpty()) subId = list.get(0).getSubscriptionId();
         }
-        if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
-          TelephonyManager subTm = tm.createForSubscriptionId(subId);
-          if (subTm != null) return subTm;
-        }
+        return subId;
       } catch (Exception ignored) {
       }
     }
-    return tm;
+    return SubscriptionManager.INVALID_SUBSCRIPTION_ID;
   }
 
   boolean isAirplaneModeOn() {
@@ -203,8 +298,8 @@ public class NetIndicators extends View {
     } catch (Exception ignored) {
     }
 
-    TelephonyManager currentTm = resolveActiveTelephonyManager();
-    if (currentTm != activeTm) {
+    int targetSubId = resolveActiveSubId();
+    if (targetSubId != activeSubId || activeTm == null) {
       unregisterPhoneListener();
       registerPhoneListener();
     }
@@ -240,20 +335,32 @@ public class NetIndicators extends View {
       displayGeneration = "";
     }
 
-    int count = (wifi ? 1 : 0) + (mobile ? 1 : 0);
-    setVisibility(count == 0 ? GONE : VISIBLE);
+    SharedPreferences prefs = getContext().getSharedPreferences("home", 0);
+    boolean showWifi = prefs.getBoolean("show_wifi", true);
+    boolean showMobile = prefs.getBoolean("show_mobile_signal", true);
+    boolean showSpeed = prefs.getBoolean("show_net_speed", true);
+    boolean drawWifi = wifi && showWifi;
+    boolean drawMobile = mobile && showMobile;
+    boolean drawSpeed = showSpeed && (wifi || mobile);
+    int count = (drawWifi ? 1 : 0) + (drawMobile ? 1 : 0);
+    setVisibility(count == 0 && !drawSpeed ? GONE : VISIBLE);
     if (getLayoutParams() != null) {
-      getLayoutParams().width = (int) (count * 36 * getResources().getDisplayMetrics().density);
-      requestLayout();
+      int widthDp = count * 36 + (drawSpeed ? SPEED_SLOT_DP : 0);
+      int widthPx = (int) (widthDp * getResources().getDisplayMetrics().density);
+      if (widthPx != lastLayoutWidth || getLayoutParams().width != widthPx) {
+        lastLayoutWidth = widthPx;
+        getLayoutParams().width = widthPx;
+        requestLayout();
+      }
     }
     String mobileDesc = "";
-    if (mobile) {
+    if (drawMobile) {
       mobileDesc =
           inService
               ? ((generation.isEmpty() ? "移动网络" : generation) + "信号" + level + "/4格")
               : "移动网络无服务";
     }
-    setContentDescription((wifi ? "Wi-Fi已连接 " : "") + mobileDesc);
+    setContentDescription((drawWifi ? "Wi-Fi已连接 " : "") + mobileDesc);
     invalidate();
   }
 
@@ -364,11 +471,17 @@ public class NetIndicators extends View {
     c.scale(unit, unit);
     SharedPreferences prefs = getContext().getSharedPreferences("home", 0);
     boolean paper = prefs.getBoolean("paper_theme", false) && !prefs.getBoolean("paper_dark", false);
+    boolean showWifi = prefs.getBoolean("show_wifi", true);
+    boolean showMobile = prefs.getBoolean("show_mobile_signal", true);
+    boolean showSpeed = prefs.getBoolean("show_net_speed", true);
+    boolean drawWifi = wifi && showWifi;
+    boolean drawMobile = mobile && showMobile;
+    boolean drawSpeed = showSpeed && (wifi || mobile);
     int baseColor = paper ? 0xff454545 : 0xffb5bdc9;
     p.setColor(baseColor);
     p.setStrokeCap(Paint.Cap.ROUND);
     int slot = 0;
-    if (wifi) {
+    if (drawWifi) {
       c.save();
       c.translate(slot++ * 36f, 0f);
       p.setAlpha(255);
@@ -382,7 +495,7 @@ public class NetIndicators extends View {
       c.drawCircle(18f, 25f, 1.6f, p);
       c.restore();
     }
-    if (mobile) {
+    if (drawMobile) {
       c.save();
       c.translate(slot++ * 36f, 0f);
       p.setStyle(Paint.Style.FILL);
@@ -405,6 +518,17 @@ public class NetIndicators extends View {
         c.drawLine(12f, 9f, 7f, 14f, p);
         p.setColor(baseColor);
       }
+      c.restore();
+    }
+    if (drawSpeed) {
+      c.save();
+      c.translate(slot * 36f + 2f, 0f);
+      p.setStyle(Paint.Style.FILL);
+      p.setColor(baseColor);
+      p.setAlpha(235);
+      p.setTextSize(8.5f);
+      c.drawText("↑" + formatSpeed(txBytesPerSec), 0f, 15f, p);
+      c.drawText("↓" + formatSpeed(rxBytesPerSec), 0f, 26f, p);
       c.restore();
     }
     c.restore();
