@@ -260,6 +260,25 @@ final class ProxyGuard {
     return sb.toString();
   }
 
+  static String countryDisplayName(String code) {
+    if (code == null || code.isEmpty()) return "";
+    String c = code.trim().toUpperCase(java.util.Locale.ROOT);
+    if ("JP".equals(c)) return "日本";
+    if ("US".equals(c)) return "美国";
+    if ("GB".equals(c) || "UK".equals(c)) return "英国";
+    if ("SG".equals(c)) return "新加坡";
+    if ("TW".equals(c)) return "台湾";
+    if ("HK".equals(c)) return "香港";
+    if ("KR".equals(c)) return "韩国";
+    if ("DE".equals(c)) return "德国";
+    if ("CA".equals(c)) return "加拿大";
+    if ("AU".equals(c)) return "澳大利亚";
+    if ("FR".equals(c)) return "法国";
+    if ("NL".equals(c)) return "荷兰";
+    if ("CN".equals(c)) return "中国";
+    return c;
+  }
+
   static ExitIpResult checkExitCountry() {
     String[] traceUrls = {
       "https://chatgpt.com/cdn-cgi/trace",

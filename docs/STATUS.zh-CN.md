@@ -2,7 +2,11 @@
 
 [English (default)](STATUS.md)
 
-版本 1.8.3，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+版本 1.8.4，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+
+## v1.8.4 更新说明
+
+- 在顶部状态栏 VPN 图标旁新增实时代理节点区域展示（如 `日本`、`美国`、`英国`、`新加坡` 等）：代理开启时显示当前出口国家中文名称（位于安全节点范围内显示绿色，超出范围或节点不通时高亮红色提示），点击可立即刷新节点状态。
 
 ## v1.8.3 更新说明
 

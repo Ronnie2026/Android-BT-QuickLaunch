@@ -2,7 +2,10 @@
 
 [简体中文](STATUS.zh-CN.md)
 
-Version 1.8.3, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+Version 1.8.4, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+
+## v1.8.4 update
+- Added live proxy exit-region badge (`日本` / `美国` / `英国` / `新加坡`, etc.) next to the status bar VPN icon whenever VPN is active; highlights in green when within configured Safe Node Regions and red if outside or unreachable, with tap-to-refresh.
 
 ## v1.8.3 update
 - Added **Exit node region guard & Safe Node Regions** (`proxy_require_jp`, default on; `proxy_allowed_regions`, default `JP`) to `ProxyGuard` and `MainActivity`: before launching protected AI apps, verifies Clash VPN is up, external network is reachable (`chatgpt.com/cdn-cgi/trace` with fallback), and exit country matches the configured safe regions (JP by default, selectable for US/SG/TW/HK/KR/GB/DE); blocks launch with a one-tap **Open Clash** prompt if unreachable or outside allowed regions.

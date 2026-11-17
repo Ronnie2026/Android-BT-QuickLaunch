@@ -71,9 +71,11 @@ public class MainActivity extends Activity {
                     if (!desktopVisible) return;
                     if (vpnIcon != null && proxyStatus != null) {
                       boolean ready = proxyStatus.ready();
+                      boolean becameReady = !vpnIcon.connected && ready;
                       vpnIcon.connected = ready;
                       vpnIcon.invalidate();
                       vpnIcon.setContentDescription(ready ? "VPN 代理已就绪" : "VPN 代理未就绪");
+                      updateVpnRegionBadge(ready, becameReady);
                     }
                     updateAccessibilityBadge();
                     for (int i = 0; i < 4; i++) {
@@ -128,6 +130,11 @@ public class MainActivity extends Activity {
         }
       };
   StatusGlyph bluetoothIcon, vpnIcon, accessibilityIcon, btAudioIcon;
+  TextView vpnRegionBadge;
+  volatile String lastVpnCountry = "";
+  volatile boolean lastVpnReachable = false;
+  long lastVpnRegionCheckAt = 0L;
+  boolean vpnRegionChecking = false;
   android.media.AudioManager audioManager;
   boolean audioCallbackRegistered;
   final android.media.AudioDeviceCallback audioDeviceCallback =
@@ -140,6 +147,67 @@ public class MainActivity extends Activity {
           updateBluetoothAudio();
         }
       };
+
+  void updateVpnRegionBadge(boolean ready, boolean forceRefresh) {
+    if (vpnRegionBadge == null) return;
+    boolean showVpn = p.getBoolean("show_vpn_status", true);
+    if (!showVpn || !ready) {
+      vpnRegionBadge.setVisibility(View.GONE);
+      if (!ready) {
+        lastVpnCountry = "";
+        lastVpnReachable = false;
+        lastVpnRegionCheckAt = 0L;
+      }
+      return;
+    }
+    vpnRegionBadge.setVisibility(View.VISIBLE);
+    boolean paper = lightPaper();
+    if (lastVpnReachable && !lastVpnCountry.isEmpty()) {
+      boolean safe = ProxyGuard.isAllowedRegion(p, lastVpnCountry);
+      vpnRegionBadge.setText(ProxyGuard.countryDisplayName(lastVpnCountry));
+      vpnRegionBadge.setTextColor(
+          safe ? (paper ? 0xff1d7a46 : 0xff62d492) : (paper ? 0xffc93b3b : 0xfff06b66));
+    } else if (!lastVpnReachable && lastVpnRegionCheckAt > 0L) {
+      vpnRegionBadge.setText("不通");
+      vpnRegionBadge.setTextColor(paper ? 0xffc93b3b : 0xfff06b66);
+    } else {
+      vpnRegionBadge.setText("检测中");
+      vpnRegionBadge.setTextColor(paper ? 0xff454545 : 0xffb5bdc9);
+    }
+    long now = SystemClock.elapsedRealtime();
+    if (forceRefresh || lastVpnRegionCheckAt == 0L || now - lastVpnRegionCheckAt >= 60_000L) {
+      refreshVpnRegionNow(false);
+    }
+  }
+
+  void refreshVpnRegionNow(boolean notifyToast) {
+    if (vpnRegionChecking) return;
+    vpnRegionChecking = true;
+    networkWorker.execute(
+        () -> {
+          ProxyGuard.ExitIpResult exit = ProxyGuard.checkExitCountry();
+          h.post(
+              () -> {
+                vpnRegionChecking = false;
+                if (isDestroyed() || isFinishing()) return;
+                lastVpnRegionCheckAt = SystemClock.elapsedRealtime();
+                lastVpnReachable = exit.reachable;
+                lastVpnCountry = exit.country;
+                updateVpnRegionBadge(vpnIcon != null && vpnIcon.connected, false);
+                if (notifyToast) {
+                  String msg =
+                      exit.reachable
+                          ? ("VPN 已连接 · 节点区域："
+                              + ProxyGuard.countryDisplayName(exit.country)
+                              + " ("
+                              + exit.country
+                              + ")")
+                          : ("VPN 已开启，但外网节点不通：" + exit.error);
+                  Toast.makeText(this, msg, 0).show();
+                }
+              });
+        });
+  }
 
   void updateAccessibilityBadge() {
     if (accessibilityIcon == null) return;
@@ -528,17 +596,30 @@ public class MainActivity extends Activity {
 
     vpnIcon = new StatusGlyph(this, 4);
     vpnIcon.paper = paper;
-    vpnIcon.setVisibility(p.getBoolean("show_vpn_status", true) ? View.VISIBLE : View.GONE);
+    boolean showVpn = p.getBoolean("show_vpn_status", true);
+    vpnIcon.setVisibility(showVpn ? View.VISIBLE : View.GONE);
     LinearLayout.LayoutParams vpnParams = new LinearLayout.LayoutParams(dp(30), dp(36));
     vpnParams.rightMargin = dp(2);
     statusBar.addView(vpnIcon, vpnParams);
-    vpnIcon.setOnClickListener(
-        v ->
-            Toast.makeText(
-                    this,
-                    vpnIcon.connected ? "VPN 代理已就绪" : "VPN 代理未连接，请在“通用设置”检测或启动 Clash",
-                    0)
-                .show());
+
+    vpnRegionBadge = new TextView(this);
+    vpnRegionBadge.setTextSize(11);
+    vpnRegionBadge.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+    vpnRegionBadge.setGravity(Gravity.CENTER_VERTICAL);
+    vpnRegionBadge.setPadding(dp(2), 0, dp(4), 0);
+    vpnRegionBadge.setVisibility(View.GONE);
+    statusBar.addView(vpnRegionBadge, new LinearLayout.LayoutParams(-2, dp(36)));
+
+    View.OnClickListener vpnClick =
+        v -> {
+          if (!vpnIcon.connected) {
+            Toast.makeText(this, "VPN 代理未连接，请在“通用设置”检测或启动 Clash", 0).show();
+            return;
+          }
+          refreshVpnRegionNow(true);
+        };
+    vpnIcon.setOnClickListener(vpnClick);
+    vpnRegionBadge.setOnClickListener(vpnClick);
 
     accessibilityIcon = new StatusGlyph(this, 5);
     accessibilityIcon.paper = paper;
