@@ -2,7 +2,11 @@
 
 [English (default)](STATUS.md)
 
-版本 1.8.0，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+版本 1.8.1，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+
+## v1.8.1 更新说明
+
+- 在省电策略中新增 **“仅充电时保持常亮”**（默认开启）：插电开车时保持桌面常亮，拔掉电源用电池时自动取消 `FLAG_KEEP_SCREEN_ON`，交由系统息屏超时正常休眠省电。
 
 ## v1.8.0 封版说明
 - 改进 `NetIndicators`：在非飞行模式且检测到可用 SIM 卡时，持续展示蜂窝信号强度（0～4 格）与网络制式（`5G`/`4G`/`3G`/`2G`），支持与 Wi-Fi 共存以及纯数据域驻网（语音域 `OUT_OF_SERVICE` 但数据域 `IN_SERVICE`）。
