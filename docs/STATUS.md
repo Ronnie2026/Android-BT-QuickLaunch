@@ -2,10 +2,10 @@
 
 [简体中文](STATUS.zh-CN.md)
 
-Version 1.8.1, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+Version 1.8.2, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
 
-## v1.8.1 update
-- Added **Keep screen on only while charging** (`keep_screen_on_charging_only`, default on) under Power Saving settings: clears `FLAG_KEEP_SCREEN_ON` when unplugged so Android's screen-off timeout puts the device to sleep on battery while staying awake on car USB power.
+## v1.8.2 update
+- Disabled `FLAG_KEEP_SCREEN_ON` by default (replaced with optional **Keep screen on** switch `keep_screen_on`, default off) so Android's system screen-off/lock timeout saves power whenever idle, even when plugged in.
 
 ## v1.8.0 release summary
 - Improved `NetIndicators` so cellular signal bars (0–4) and network generation (`5G`/`4G`/`3G`/`2G`) stay visible whenever a SIM is ready and airplane mode is off, including alongside Wi-Fi and on data-only registration (PS `IN_SERVICE` even when CS voice is `OUT_OF_SERVICE`).

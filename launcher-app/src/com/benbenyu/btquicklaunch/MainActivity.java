@@ -116,7 +116,6 @@ public class MainActivity extends Activity {
               scale = in.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100);
           int percent = level < 0 ? -1 : level * 100 / Math.max(1, scale);
           boolean charging = in.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0;
-          updateKeepScreenOn(charging);
           batteryText.level = Math.max(0, percent);
           batteryText.charging = charging;
           batteryText.invalidate();
@@ -247,7 +246,7 @@ public class MainActivity extends Activity {
     updateBluetoothAudio();
     updateAccessibilityBadge();
     getWindow().getDecorView().setSystemUiVisibility(5894);
-    updateKeepScreenOn(isChargingNow());
+    updateKeepScreenOn();
     applyBrightness();
   }
 
@@ -303,7 +302,7 @@ public class MainActivity extends Activity {
     setShowWhenLocked(true);
     getWindow().getDecorView().setSystemUiVisibility(5894);
     p = getSharedPreferences("home", 0);
-    updateKeepScreenOn(isChargingNow());
+    updateKeepScreenOn();
     if (b == null && p.getBoolean("disable_ime", true)) ImeGuard.apply(this, p, true, false);
     draw();
     if (getIntent().hasExtra("button_action")) button(getIntent());
@@ -956,18 +955,9 @@ public class MainActivity extends Activity {
     }
   }
 
-  boolean isChargingNow() {
-    try {
-      Intent batt = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-      return batt != null && batt.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0;
-    } catch (Exception e) {
-      return false;
-    }
-  }
-
-  void updateKeepScreenOn(boolean charging) {
-    boolean chargingOnly = p == null || p.getBoolean("keep_screen_on_charging_only", true);
-    if (!chargingOnly || charging) getWindow().addFlags(128);
+  void updateKeepScreenOn() {
+    boolean keepOn = p != null && p.getBoolean("keep_screen_on", false);
+    if (keepOn) getWindow().addFlags(128);
     else getWindow().clearFlags(128);
   }
 
@@ -1075,13 +1065,13 @@ public class MainActivity extends Activity {
     beaconCard.addView(
         IosUi.switchRow(
             this,
-            "3. 仅充电时保持常亮",
-            p.getBoolean("keep_screen_on_charging_only", true),
+            "3. 桌面保持屏幕常亮",
+            p.getBoolean("keep_screen_on", false),
             paper,
             null,
             (v, on) -> {
-              p.edit().putBoolean("keep_screen_on_charging_only", on).apply();
-              updateKeepScreenOn(isChargingNow());
+              p.edit().putBoolean("keep_screen_on", on).apply();
+              updateKeepScreenOn();
             }));
     beaconCard.addView(IosUi.divider(this, paper));
     beaconCard.addView(
