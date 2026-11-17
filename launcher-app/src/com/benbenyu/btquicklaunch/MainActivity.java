@@ -1217,6 +1217,28 @@ public class MainActivity extends Activity {
             (v, on) -> p.edit().putBoolean("proxy_on_boot", on).apply()));
     netCard.addView(IosUi.divider(this, paper));
     netCard.addView(
+        IosUi.switchRow(
+            this,
+            "启动前校验出口节点（防飘号）",
+            p.getBoolean(ProxyGuard.PREF_REQUIRE_JP, true),
+            paper,
+            null,
+            (v, on) -> p.edit().putBoolean(ProxyGuard.PREF_REQUIRE_JP, on).apply()));
+    netCard.addView(IosUi.divider(this, paper));
+    LinearLayout regionRow =
+        IosUi.disclosureRow(
+            this,
+            "安全节点范围",
+            ProxyGuard.allowedRegionsSummary(p),
+            paper,
+            false,
+            () -> {});
+    TextView regionVal = (TextView) regionRow.getChildAt(1);
+    regionVal.setMaxLines(2);
+    regionRow.setOnClickListener(v -> pickProxyRegions(regionVal));
+    netCard.addView(regionRow);
+    netCard.addView(IosUi.divider(this, paper));
+    netCard.addView(
         IosUi.disclosureRow(
             this,
             "需检测 VPN 的应用",
@@ -1232,7 +1254,10 @@ public class MainActivity extends Activity {
     netCard.addView(diagRow);
     body.addView(netCard);
     body.addView(
-        IosUi.footer(this, "默认支持 ChatGPT / Grok / Gemini，仅在本地检测 VPN 隧道与端口，不发起外网请求。", paper));
+        IosUi.footer(
+            this,
+            "默认保护 ChatGPT / Grok / Gemini：先确认 Clash VPN 运行，再探测外网连通性与出口 IP 是否在安全节点范围内（默认日本 JP），异常时拦截进入并提示切换节点。",
+            paper));
 
     body.addView(IosUi.header(this, "软件更新", paper));
     LinearLayout updateCard = IosUi.card(this, paper);
@@ -1616,8 +1641,12 @@ public class MainActivity extends Activity {
                 if (generation != launchGeneration || isDestroyed()) return;
                 boolean gpt = pkg.equals("com.openai.chatgpt");
                 if (s.ready()) {
-                  busy = false;
-                  open(pkg, supportsVoice(pkg) && p.getBoolean(i + "voice", true));
+                  if (!p.getBoolean(ProxyGuard.PREF_REQUIRE_JP, true)) {
+                    busy = false;
+                    open(pkg, supportsVoice(pkg) && p.getBoolean(i + "voice", true));
+                  } else {
+                    verifyExitJpAndOpen(i, generation, pkg);
+                  }
                   return;
                 }
                 if (!s.baseNetwork) {
@@ -1642,6 +1671,80 @@ public class MainActivity extends Activity {
                   return;
                 }
                 failGuarded(pkg, gpt, "未检测到 Clash Meta VPN 运行，请手动检查");
+              });
+        });
+  }
+
+  void pickProxyRegions(TextView out) {
+    String[][] opts = ProxyGuard.REGION_OPTIONS;
+    String[] labels = new String[opts.length];
+    boolean[] checked = new boolean[opts.length];
+    java.util.LinkedHashSet<String> cur = ProxyGuard.allowedRegions(p);
+    for (int i = 0; i < opts.length; i++) {
+      labels[i] = opts[i][1];
+      checked[i] = cur.contains(opts[i][0]);
+    }
+    new AlertDialog.Builder(this)
+        .setTitle("安全节点范围（可多选）")
+        .setMultiChoiceItems(opts.length > 0 ? labels : new String[0], checked, (d, which, isChecked) -> checked[which] = isChecked)
+        .setPositiveButton(
+            "保存",
+            (d, w) -> {
+              java.util.LinkedHashSet<String> next = new java.util.LinkedHashSet<>();
+              for (int i = 0; i < opts.length; i++) if (checked[i]) next.add(opts[i][0]);
+              if (next.isEmpty()) {
+                Toast.makeText(this, "至少保留一个区域，已恢复默认日本 (JP)", 0).show();
+                next.add("JP");
+              }
+              ProxyGuard.setAllowedRegions(p, next);
+              out.setText(ProxyGuard.allowedRegionsSummary(p));
+            })
+        .setNeutralButton(
+            "仅日本 (JP)",
+            (d, w) -> {
+              java.util.LinkedHashSet<String> jp = new java.util.LinkedHashSet<>();
+              jp.add("JP");
+              ProxyGuard.setAllowedRegions(p, jp);
+              out.setText(ProxyGuard.allowedRegionsSummary(p));
+            })
+        .setNegativeButton("取消", null)
+        .show();
+  }
+
+  void verifyExitJpAndOpen(int i, int generation, String pkg) {
+    Toast.makeText(this, "正在校验出口节点区域…", 0).show();
+    networkWorker.execute(
+        () -> {
+          ProxyGuard.ExitIpResult exit = ProxyGuard.checkExitCountry();
+          h.post(
+              () -> {
+                if (generation != launchGeneration || isDestroyed() || isFinishing()) return;
+                busy = false;
+                if (exit.reachable && ProxyGuard.isAllowedRegion(p, exit.country)) {
+                  open(pkg, supportsVoice(pkg) && p.getBoolean(i + "voice", true));
+                  return;
+                }
+                String allowed = ProxyGuard.allowedRegionsSummary(p);
+                String title =
+                    exit.reachable ? "节点区域不符拦截（防封号）" : "代理节点不通，已拦截进入";
+                String msg =
+                    exit.reachable
+                        ? ("检测到当前代理出口国家为「"
+                            + exit.country
+                            + "」"
+                            + (exit.ip.isEmpty() ? "" : "（" + exit.ip + "）")
+                            + "，不在允许的安全节点范围（"
+                            + allowed
+                            + "）内！\n\n为防止账号风控封号，已阻止打开该应用。请前往 Clash Meta 切换节点。")
+                        : ("Clash 虽然已启动，但当前外网探测不通（"
+                            + exit.error
+                            + "）。\n\n已阻止打开该应用，请检查网络或前往 Clash Meta 切换可用节点。");
+                new AlertDialog.Builder(this)
+                    .setTitle(title)
+                    .setMessage(msg)
+                    .setPositiveButton("打开 Clash", (d, w) -> ProxyGuard.openClashUi(this))
+                    .setNegativeButton("取消", null)
+                    .show();
               });
         });
   }
@@ -1685,8 +1788,14 @@ public class MainActivity extends Activity {
     new Thread(
             () -> {
               ProxyGuard.Status s = ProxyGuard.check(this);
+              String extra = "";
+              if (s.ready() && p.getBoolean(ProxyGuard.PREF_REQUIRE_JP, true)) {
+                ProxyGuard.ExitIpResult exit = ProxyGuard.checkExitCountry();
+                extra = "  出口=" + (exit.reachable ? exit.country : "不通");
+              }
+              final String text = s.summary() + extra;
               runOnUiThread(() -> {
-                if (!isDestroyed() && !isFinishing()) out.setText(s.summary());
+                if (!isDestroyed() && !isFinishing()) out.setText(text);
               });
             })
         .start();

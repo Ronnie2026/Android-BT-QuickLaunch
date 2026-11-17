@@ -2,7 +2,11 @@
 
 [English (default)](STATUS.md)
 
-版本 1.8.2，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+版本 1.8.3，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+
+## v1.8.3 更新说明
+
+- 在 `ProxyGuard` 与 `MainActivity` 中新增 **“启动前校验出口节点（防飘号）”** 与 **“安全节点范围”**（默认仅允许 `日本 (JP)`，支持在设置中多选美国、新加坡、台湾、香港、韩国、英国、德国等常用区域）：启动受保护的海外 AI 应用前，依次校验本地 Clash VPN、外网连通性（优先 `chatgpt.com/cdn-cgi/trace`）与出口国家码是否在安全节点范围内；若节点不通或不在允许区域，直接拦截并提示一键打开 Clash 切换节点。
 
 ## v1.8.2 更新说明
 

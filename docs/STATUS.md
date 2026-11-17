@@ -2,7 +2,10 @@
 
 [简体中文](STATUS.zh-CN.md)
 
-Version 1.8.2, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+Version 1.8.3, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+
+## v1.8.3 update
+- Added **Exit node region guard & Safe Node Regions** (`proxy_require_jp`, default on; `proxy_allowed_regions`, default `JP`) to `ProxyGuard` and `MainActivity`: before launching protected AI apps, verifies Clash VPN is up, external network is reachable (`chatgpt.com/cdn-cgi/trace` with fallback), and exit country matches the configured safe regions (JP by default, selectable for US/SG/TW/HK/KR/GB/DE); blocks launch with a one-tap **Open Clash** prompt if unreachable or outside allowed regions.
 
 ## v1.8.2 update
 - Disabled `FLAG_KEEP_SCREEN_ON` by default (replaced with optional **Keep screen on** switch `keep_screen_on`, default off) so Android's system screen-off/lock timeout saves power whenever idle, even when plugged in.
