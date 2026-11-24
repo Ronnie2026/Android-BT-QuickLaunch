@@ -2,7 +2,14 @@
 
 [English (default)](STATUS.md)
 
-版本 1.8.4，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+版本 1.8.5，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+
+## v1.8.5 更新说明
+- 将状态栏出口区域后台探测拆分至独立 `regionWorker`、`uiHandler` 与 `AtomicBoolean`，与应用启动 `networkWorker` 及 `cancelLaunch()` 隔离，修复并发队列丢弃导致启动无响应、`busy`/`vpnRegionChecking` 永久卡死以及 `cancelLaunch()` 误删蓝牙音频与自动更新回调的问题。
+- 改进 `ProxyGuard.checkExitCountry()`：本地 Clash 代理端口（`127.0.0.1:7890/7891`）监听时优先显式经代理端口探测出口国家，回退直连，避免 Clash 分应用 VPN 未勾选桌面时误测为直连（`CN` 或不通）而误拦截。
+- 修复启用 VPN 保护的非 GPT 应用位跳过前置应用（`before`）与等待延迟（`delay`）的问题，并在修改安全节点范围或重绘桌面时即时同步状态栏区域徽标。
+- 在 `ConfigBackup` 中补齐 `keep_screen_on`、`auto_update_check`、`update_source_mode`、`update_gitee_repo` 备份支持及 `proxy_allowed_regions` 国家码格式校验；补全 `proxyInterceptDialog`、`WifiBeaconGuard.destroy()` 与 `MainActivity.onDestroy()` 生命周期清理。
+- 新增 `ProxyGuardChecks` 单元测试，并将 `ARCHITECTURE`、`PROJECT_CONTEXT` 双语文档同步至 `v1.8.4`。
 
 ## v1.8.4 更新说明
 

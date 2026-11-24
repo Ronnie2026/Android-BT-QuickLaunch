@@ -71,7 +71,8 @@ public class MainActivity extends Activity {
                     if (!desktopVisible) return;
                     if (vpnIcon != null && proxyStatus != null) {
                       boolean ready = proxyStatus.ready();
-                      boolean becameReady = !vpnIcon.connected && ready;
+                      boolean becameReady = !lastVpnReady && ready;
+                      lastVpnReady = ready;
                       vpnIcon.connected = ready;
                       vpnIcon.invalidate();
                       vpnIcon.setContentDescription(ready ? "VPN 代理已就绪" : "VPN 代理未就绪");
@@ -131,10 +132,13 @@ public class MainActivity extends Activity {
       };
   StatusGlyph bluetoothIcon, vpnIcon, accessibilityIcon, btAudioIcon;
   TextView vpnRegionBadge;
+  AlertDialog proxyInterceptDialog;
+  volatile boolean lastVpnReady = false;
   volatile String lastVpnCountry = "";
   volatile boolean lastVpnReachable = false;
   long lastVpnRegionCheckAt = 0L;
-  boolean vpnRegionChecking = false;
+  final java.util.concurrent.atomic.AtomicBoolean vpnRegionChecking =
+      new java.util.concurrent.atomic.AtomicBoolean(false);
   android.media.AudioManager audioManager;
   boolean audioCallbackRegistered;
   final android.media.AudioDeviceCallback audioDeviceCallback =
@@ -181,32 +185,41 @@ public class MainActivity extends Activity {
   }
 
   void refreshVpnRegionNow(boolean notifyToast) {
-    if (vpnRegionChecking) return;
-    vpnRegionChecking = true;
-    networkWorker.execute(
-        () -> {
-          ProxyGuard.ExitIpResult exit = ProxyGuard.checkExitCountry();
-          h.post(
-              () -> {
-                vpnRegionChecking = false;
-                if (isDestroyed() || isFinishing()) return;
-                lastVpnRegionCheckAt = SystemClock.elapsedRealtime();
-                lastVpnReachable = exit.reachable;
-                lastVpnCountry = exit.country;
-                updateVpnRegionBadge(vpnIcon != null && vpnIcon.connected, false);
-                if (notifyToast) {
-                  String msg =
-                      exit.reachable
-                          ? ("VPN 已连接 · 节点区域："
-                              + ProxyGuard.countryDisplayName(exit.country)
-                              + " ("
-                              + exit.country
-                              + ")")
-                          : ("VPN 已开启，但外网节点不通：" + exit.error);
-                  Toast.makeText(this, msg, 0).show();
-                }
-              });
-        });
+    if (!vpnRegionChecking.compareAndSet(false, true)) return;
+    try {
+      regionWorker.execute(
+          () -> {
+            ProxyGuard.ExitIpResult exit = null;
+            try {
+              exit = ProxyGuard.checkExitCountry();
+            } finally {
+              final ProxyGuard.ExitIpResult result =
+                  exit != null ? exit : new ProxyGuard.ExitIpResult(false, "", "", "探测异常");
+              vpnRegionChecking.set(false);
+              uiHandler.post(
+                  () -> {
+                    if (isDestroyed() || isFinishing()) return;
+                    lastVpnRegionCheckAt = SystemClock.elapsedRealtime();
+                    lastVpnReachable = result.reachable;
+                    lastVpnCountry = result.country;
+                    updateVpnRegionBadge(vpnIcon != null && vpnIcon.connected, false);
+                    if (notifyToast) {
+                      String msg =
+                          result.reachable
+                              ? ("VPN 已连接 · 节点区域："
+                                  + ProxyGuard.countryDisplayName(result.country)
+                                  + " ("
+                                  + result.country
+                                  + ")")
+                              : ("VPN 已开启，但外网节点不通：" + result.error);
+                      Toast.makeText(this, msg, 0).show();
+                    }
+                  });
+            }
+          });
+    } catch (java.util.concurrent.RejectedExecutionException ignored) {
+      vpnRegionChecking.set(false);
+    }
   }
 
   void updateAccessibilityBadge() {
@@ -306,7 +319,7 @@ public class MainActivity extends Activity {
     inputManager.registerInputDeviceListener(deviceListener, new Handler());
     if (audioManager == null) audioManager = (android.media.AudioManager) getSystemService(AUDIO_SERVICE);
     if (audioManager != null && !audioCallbackRegistered) {
-      audioManager.registerAudioDeviceCallback(audioDeviceCallback, h);
+      audioManager.registerAudioDeviceCallback(audioDeviceCallback, uiHandler);
       audioCallbackRegistered = true;
     }
     HidConnectionManager.onStateChanged = () -> runOnUiThread(this::updateBluetooth);
@@ -322,6 +335,7 @@ public class MainActivity extends Activity {
     stopTonePreview();
     clearCleanFeedback();
     if (gearMenuDialog != null && gearMenuDialog.isShowing()) gearMenuDialog.dismiss();
+    if (proxyInterceptDialog != null && proxyInterceptDialog.isShowing()) proxyInterceptDialog.dismiss();
     if(idlePower!=null)idlePower.stop();
     if (wifiBeaconGuard != null) wifiBeaconGuard.stop();
     if (networkIndicators != null) networkIndicators.stop();
@@ -344,8 +358,18 @@ public class MainActivity extends Activity {
   }
 
   android.content.SharedPreferences p;
-  Handler h = new Handler();
-  final java.util.concurrent.ThreadPoolExecutor networkWorker=new java.util.concurrent.ThreadPoolExecutor(1,1,0L,java.util.concurrent.TimeUnit.MILLISECONDS,new java.util.concurrent.ArrayBlockingQueue<Runnable>(1),new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
+  Handler h = new Handler(Looper.getMainLooper());
+  final Handler uiHandler = new Handler(Looper.getMainLooper());
+  final java.util.concurrent.ThreadPoolExecutor networkWorker =
+      new java.util.concurrent.ThreadPoolExecutor(
+          1,
+          1,
+          0L,
+          java.util.concurrent.TimeUnit.MILLISECONDS,
+          new java.util.concurrent.ArrayBlockingQueue<Runnable>(4),
+          new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
+  final java.util.concurrent.ExecutorService regionWorker =
+      java.util.concurrent.Executors.newSingleThreadExecutor();
   static final int REQ_PHONE_STATE_PERM = 101;
   static final int REQ_WIFI_BEACON_LOCATION_PERM = 102;
   int launchGeneration = 0;
@@ -379,7 +403,7 @@ public class MainActivity extends Activity {
       ensurePhoneStatePermission();
     }
     if (b == null && p.getBoolean(AppUpdater.PREF_AUTO_CHECK, true)) {
-      h.postDelayed(() -> AppUpdater.autoCheckIfDue(this, p), 6000);
+      uiHandler.postDelayed(() -> AppUpdater.autoCheckIfDue(this, p), 6000);
     }
   }
 
@@ -596,8 +620,10 @@ public class MainActivity extends Activity {
 
     vpnIcon = new StatusGlyph(this, 4);
     vpnIcon.paper = paper;
+    vpnIcon.connected = lastVpnReady;
     boolean showVpn = p.getBoolean("show_vpn_status", true);
     vpnIcon.setVisibility(showVpn ? View.VISIBLE : View.GONE);
+    vpnIcon.setContentDescription(lastVpnReady ? "VPN 代理已就绪" : "VPN 代理未就绪");
     LinearLayout.LayoutParams vpnParams = new LinearLayout.LayoutParams(dp(30), dp(36));
     vpnParams.rightMargin = dp(2);
     statusBar.addView(vpnIcon, vpnParams);
@@ -609,6 +635,7 @@ public class MainActivity extends Activity {
     vpnRegionBadge.setPadding(dp(2), 0, dp(4), 0);
     vpnRegionBadge.setVisibility(View.GONE);
     statusBar.addView(vpnRegionBadge, new LinearLayout.LayoutParams(-2, dp(36)));
+    updateVpnRegionBadge(lastVpnReady, false);
 
     View.OnClickListener vpnClick =
         v -> {
@@ -789,6 +816,7 @@ public class MainActivity extends Activity {
   void showGearMenu() {
     cancelLaunch();
     if (gearMenuDialog != null && gearMenuDialog.isShowing()) gearMenuDialog.dismiss();
+    if (proxyInterceptDialog != null && proxyInterceptDialog.isShowing()) proxyInterceptDialog.dismiss();
     boolean paper = lightPaper();
     Dialog d = new Dialog(this);
     d.requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -1683,6 +1711,10 @@ public class MainActivity extends Activity {
       guardedLaunch(i, generation, pkg, false, 0);
       return;
     }
+    openConfiguredSlot(i, generation, pkg);
+  }
+
+  void openConfiguredSlot(int i, int generation, String pkg) {
     if (pkg.equals("com.openai.chatgpt")) {
       busy = false;
       open(pkg, p.getBoolean(i + "voice", true));
@@ -1707,53 +1739,56 @@ public class MainActivity extends Activity {
   static final int PROXY_RETRIES = 4, NETWORK_WAITS = 3;
 
   /**
-   * Launch flow (local-only, no external HTTPS probes):
-   * baseNetwork && proxyRunning -> open.
+   * Launch flow:
+   * baseNetwork && proxyRunning -> verify exit region (when enabled) and open configured slot.
    * Device offline -> wait a few times.
    * VPN/proxy missing -> start Clash Meta once and re-check.
    * GPT never forces a voice call when VPN/network is down; other apps still open after a warning.
    */
   void guardedLaunch(int i, int generation, String pkg, boolean started, int attempt) {
-    networkWorker.execute(
-        () -> {
-          ProxyGuard.Status s = ProxyGuard.check(this);
-          h.post(
-              () -> {
-                if (generation != launchGeneration || isDestroyed()) return;
-                boolean gpt = pkg.equals("com.openai.chatgpt");
-                if (s.ready()) {
-                  if (!p.getBoolean(ProxyGuard.PREF_REQUIRE_JP, true)) {
-                    busy = false;
-                    open(pkg, supportsVoice(pkg) && p.getBoolean(i + "voice", true));
-                  } else {
-                    verifyExitJpAndOpen(i, generation, pkg);
-                  }
-                  return;
-                }
-                if (!s.baseNetwork) {
-                  if (attempt < NETWORK_WAITS) {
-                    if (attempt == 0) Toast.makeText(this, "等待网络连接…", 0).show();
-                    retryGuarded(i, generation, pkg, started, attempt + 1, 2000);
-                  } else failGuarded(pkg, gpt, "设备未联网，请检查 Wi-Fi 或移动数据");
-                  return;
-                }
-                if (!started) {
-                  if (!ProxyGuard.installed(this)) {
-                    failGuarded(pkg, gpt, "未检测到 VPN 代理，且未安装 Clash Meta");
+    try {
+      networkWorker.execute(
+          () -> {
+            ProxyGuard.Status s = ProxyGuard.check(this);
+            h.post(
+                () -> {
+                  if (generation != launchGeneration || isDestroyed()) return;
+                  boolean gpt = pkg.equals("com.openai.chatgpt");
+                  if (s.ready()) {
+                    if (!p.getBoolean(ProxyGuard.PREF_REQUIRE_JP, true)) {
+                      openConfiguredSlot(i, generation, pkg);
+                    } else {
+                      verifyExitJpAndOpen(i, generation, pkg);
+                    }
                     return;
                   }
-                  Toast.makeText(this, "未检测到 VPN，正在启动 Clash Meta…", 0).show();
-                  ProxyGuard.start(this);
-                  retryGuarded(i, generation, pkg, true, 1, 1500);
-                  return;
-                }
-                if (attempt < PROXY_RETRIES) {
-                  retryGuarded(i, generation, pkg, true, attempt + 1, 1500);
-                  return;
-                }
-                failGuarded(pkg, gpt, "未检测到 Clash Meta VPN 运行，请手动检查");
-              });
-        });
+                  if (!s.baseNetwork) {
+                    if (attempt < NETWORK_WAITS) {
+                      if (attempt == 0) Toast.makeText(this, "等待网络连接…", 0).show();
+                      retryGuarded(i, generation, pkg, started, attempt + 1, 2000);
+                    } else failGuarded(pkg, gpt, "设备未联网，请检查 Wi-Fi 或移动数据");
+                    return;
+                  }
+                  if (!started) {
+                    if (!ProxyGuard.installed(this)) {
+                      failGuarded(pkg, gpt, "未检测到 VPN 代理，且未安装 Clash Meta");
+                      return;
+                    }
+                    Toast.makeText(this, "未检测到 VPN，正在启动 Clash Meta…", 0).show();
+                    ProxyGuard.start(this);
+                    retryGuarded(i, generation, pkg, true, 1, 1500);
+                    return;
+                  }
+                  if (attempt < PROXY_RETRIES) {
+                    retryGuarded(i, generation, pkg, true, attempt + 1, 1500);
+                    return;
+                  }
+                  failGuarded(pkg, gpt, "未检测到 Clash Meta VPN 运行，请手动检查");
+                });
+          });
+    } catch (java.util.concurrent.RejectedExecutionException e) {
+      busy = false;
+    }
   }
 
   void pickProxyRegions(TextView out) {
@@ -1779,6 +1814,7 @@ public class MainActivity extends Activity {
               }
               ProxyGuard.setAllowedRegions(p, next);
               out.setText(ProxyGuard.allowedRegionsSummary(p));
+              updateVpnRegionBadge(lastVpnReady, false);
             })
         .setNeutralButton(
             "仅日本 (JP)",
@@ -1787,6 +1823,7 @@ public class MainActivity extends Activity {
               jp.add("JP");
               ProxyGuard.setAllowedRegions(p, jp);
               out.setText(ProxyGuard.allowedRegionsSummary(p));
+              updateVpnRegionBadge(lastVpnReady, false);
             })
         .setNegativeButton("取消", null)
         .show();
@@ -1794,40 +1831,53 @@ public class MainActivity extends Activity {
 
   void verifyExitJpAndOpen(int i, int generation, String pkg) {
     Toast.makeText(this, "正在校验出口节点区域…", 0).show();
-    networkWorker.execute(
-        () -> {
-          ProxyGuard.ExitIpResult exit = ProxyGuard.checkExitCountry();
-          h.post(
-              () -> {
-                if (generation != launchGeneration || isDestroyed() || isFinishing()) return;
-                busy = false;
-                if (exit.reachable && ProxyGuard.isAllowedRegion(p, exit.country)) {
-                  open(pkg, supportsVoice(pkg) && p.getBoolean(i + "voice", true));
-                  return;
-                }
-                String allowed = ProxyGuard.allowedRegionsSummary(p);
-                String title =
-                    exit.reachable ? "节点区域不符拦截（防封号）" : "代理节点不通，已拦截进入";
-                String msg =
-                    exit.reachable
-                        ? ("检测到当前代理出口国家为「"
-                            + exit.country
-                            + "」"
-                            + (exit.ip.isEmpty() ? "" : "（" + exit.ip + "）")
-                            + "，不在允许的安全节点范围（"
-                            + allowed
-                            + "）内！\n\n为防止账号风控封号，已阻止打开该应用。请前往 Clash Meta 切换节点。")
-                        : ("Clash 虽然已启动，但当前外网探测不通（"
-                            + exit.error
-                            + "）。\n\n已阻止打开该应用，请检查网络或前往 Clash Meta 切换可用节点。");
-                new AlertDialog.Builder(this)
-                    .setTitle(title)
-                    .setMessage(msg)
-                    .setPositiveButton("打开 Clash", (d, w) -> ProxyGuard.openClashUi(this))
-                    .setNegativeButton("取消", null)
-                    .show();
-              });
-        });
+    try {
+      networkWorker.execute(
+          () -> {
+            ProxyGuard.ExitIpResult exit = ProxyGuard.checkExitCountry();
+            h.post(
+                () -> {
+                  if (isDestroyed() || isFinishing()) return;
+                  lastVpnRegionCheckAt = SystemClock.elapsedRealtime();
+                  lastVpnReachable = exit.reachable;
+                  lastVpnCountry = exit.country;
+                  updateVpnRegionBadge(vpnIcon != null && vpnIcon.connected, false);
+                  if (generation != launchGeneration) return;
+                  if (exit.reachable && ProxyGuard.isAllowedRegion(p, exit.country)) {
+                    openConfiguredSlot(i, generation, pkg);
+                    return;
+                  }
+                  busy = false;
+                  String allowed = ProxyGuard.allowedRegionsSummary(p);
+                  String title =
+                      exit.reachable ? "节点区域不符拦截（防封号）" : "代理节点不通，已拦截进入";
+                  String msg =
+                      exit.reachable
+                          ? ("检测到当前代理出口国家为「"
+                              + exit.country
+                              + "」"
+                              + (exit.ip.isEmpty() ? "" : "（" + exit.ip + "）")
+                              + "，不在允许的安全节点范围（"
+                              + allowed
+                              + "）内！\n\n为防止账号风控封号，已阻止打开该应用。请前往 Clash Meta 切换节点。")
+                          : ("Clash 虽然已启动，但当前外网探测不通（"
+                              + exit.error
+                              + "）。\n\n已阻止打开该应用，请检查网络或前往 Clash Meta 切换可用节点。");
+                  if (proxyInterceptDialog != null && proxyInterceptDialog.isShowing()) {
+                    proxyInterceptDialog.dismiss();
+                  }
+                  proxyInterceptDialog =
+                      new AlertDialog.Builder(this)
+                          .setTitle(title)
+                          .setMessage(msg)
+                          .setPositiveButton("打开 Clash", (d, w) -> ProxyGuard.openClashUi(this))
+                          .setNegativeButton("取消", null)
+                          .show();
+                });
+          });
+    } catch (java.util.concurrent.RejectedExecutionException e) {
+      busy = false;
+    }
   }
 
   void retryGuarded(int i, int generation, String pkg, boolean started, int attempt, long delay) {
@@ -1852,16 +1902,19 @@ public class MainActivity extends Activity {
   /** On desktop start: if the VPN/proxy is not running, start Clash Meta in the background. */
   void ensureProxyOnStart() {
     if (!p.getBoolean("proxy_on_boot", true) || !ProxyGuard.installed(this)) return;
-    networkWorker.execute(
-        () -> {
-          ProxyGuard.Status s = ProxyGuard.check(this);
-          h.post(
-              () -> {
-                if (isDestroyed() || s.proxyRunning() || !s.baseNetwork) return;
-                AppLog.write("BOOT_PROXY_START", null);
-                ProxyGuard.start(this);
-              });
-        });
+    try {
+      networkWorker.execute(
+          () -> {
+            ProxyGuard.Status s = ProxyGuard.check(this);
+            uiHandler.post(
+                () -> {
+                  if (isDestroyed() || s.proxyRunning() || !s.baseNetwork) return;
+                  AppLog.write("BOOT_PROXY_START", null);
+                  ProxyGuard.start(this);
+                });
+          });
+    } catch (java.util.concurrent.RejectedExecutionException ignored) {
+    }
   }
 
   void proxyDiagnose(TextView out) {
@@ -1883,11 +1936,19 @@ public class MainActivity extends Activity {
   }
 
   protected void onDestroy() {
+    if (settingsDialog != null && settingsDialog.isShowing()) settingsDialog.dismiss();
+    if (gearMenuDialog != null && gearMenuDialog.isShowing()) gearMenuDialog.dismiss();
+    if (proxyInterceptDialog != null && proxyInterceptDialog.isShowing()) proxyInterceptDialog.dismiss();
+    if (idlePower != null) idlePower.stop();
+    if (wifiBeaconGuard != null) wifiBeaconGuard.destroy();
+    if (networkIndicators != null) networkIndicators.stop();
     if (memoryIndicator != null) memoryIndicator.stop();
     if (powerIndicator != null) powerIndicator.stop();
     stopTonePreview();
     cancelLaunch();
+    uiHandler.removeCallbacksAndMessages(null);
     networkWorker.shutdownNow();
+    regionWorker.shutdownNow();
     statusHandler.removeCallbacksAndMessages(null);
     super.onDestroy();
   }

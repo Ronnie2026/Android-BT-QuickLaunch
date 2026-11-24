@@ -2,7 +2,14 @@
 
 [简体中文](STATUS.zh-CN.md)
 
-Version 1.8.4, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+Version 1.8.5, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+
+## v1.8.5 update
+- Isolated background status-bar region probing (`regionWorker` + `uiHandler` + `AtomicBoolean`) from app-launch `networkWorker` / `cancelLaunch()` so status polling never drops queued launches or permanently wedges `vpnRegionChecking` / `busy`, and protected `AudioDeviceCallback` / `autoCheckIfDue` from launch cancellation.
+- Updated `ProxyGuard.checkExitCountry()` to probe through the local Clash HTTP/mixed port (`127.0.0.1:7890/7891`) when open before falling back to the default route, avoiding false `CN`/unreachable blocks under per-app VPN mode.
+- Restored prerequisite-app (`before`) and wait-delay (`delay`) handling for VPN-guarded non-GPT slots (`openConfiguredSlot`), and immediately refreshed the status-bar region badge on region-setting changes and desktop redraws.
+- Added `keep_screen_on`, `auto_update_check`, `update_source_mode`, and `update_gitee_repo` to `ConfigBackup` with format/range checks (including ISO country-code validation for `proxy_allowed_regions`), managed `proxyInterceptDialog` lifecycle, and shut down `WifiBeaconGuard` / indicators cleanly in `MainActivity.onDestroy()`.
+- Added `ProxyGuardChecks` and synced bilingual `ARCHITECTURE` / `PROJECT_CONTEXT` docs to `v1.8.4`.
 
 ## v1.8.4 update
 - Added live proxy exit-region badge (`日本` / `美国` / `英国` / `新加坡`, etc.) next to the status bar VPN icon whenever VPN is active; highlights in green when within configured Safe Node Regions and red if outside or unreachable, with tap-to-refresh.

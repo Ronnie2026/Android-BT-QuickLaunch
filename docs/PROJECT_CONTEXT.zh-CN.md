@@ -2,7 +2,7 @@
 
 [English (default)](PROJECT_CONTEXT.md)
 
-实现基线：v1.8.0。本文描述已发布代码，不承诺未来第三方应用版本始终兼容。
+实现基线：v1.8.5。本文描述已发布代码，不承诺未来第三方应用版本始终兼容。
 
 ## 项目目标与运行环境
 
@@ -16,7 +16,7 @@ Android-BT-QuickLaunch 将安卓旧手机改造成专用车载语音终端。通
 
 1. `ButtonService` 是安卓无障碍服务，过滤指定外接键盘的数字键 1/2/3；双击启动对应的前三个应用位，三键同时按下请求清理后台。
 2. 服务唤醒手机并向 `MainActivity` 传递 `button_action`。应用位按保存的配置执行：目标包名、可选前置应用、等待时间和自动语音开关。
-3. 对启用网络保护的应用，`ProxyGuard` 检查本地网络、VPN 和 Clash 状态，必要时启动 Clash 后复检，不访问外部测试服务器。这些检查不能证明目标服务可达或账号额度充足。
+3. 对启用网络保护的应用，`ProxyGuard` 先检查本地网络、VPN 和 Clash 状态（必要时启动 Clash 后复检）；开启“启动前校验出口节点”（`proxy_require_jp`）时，还会优先经本地 Clash 代理端口探测外网出口国家（`chatgpt.com/cdn-cgi/trace`、`cloudflare.com/cdn-cgi/trace` 或 `ipinfo.io/country`，兼容分应用 VPN 模式），不在安全节点范围内或不通时拦截启动。这些检查仍不能证明账号额度充足。
 4. 支持自动语音的应用启用相应开关后，桌面启动应用并发起有时限的无障碍搜索。GPT 启动还使用限定目标包名的 `https://chatgpt.com/voice` Intent。
 5. 语音匹配限定在目标应用包名内。Gemini 启动包名为 `com.google.android.apps.bard`，但显示界面可能属于 `com.google.android.googlequicksearchbox`。
 
@@ -72,10 +72,10 @@ ID 和描述属于可替代的匹配条件，不要求两者同时匹配。实�
 ## 桌面反馈与资源占用
 
 - 图标统一使用圆形遮罩。橙色圆环表示检测到对应包名／进程正在运行，不代表应用健康或正在语音通话。交换应用位后，状态仍跟随包名。
-- 清理操作强行停止配置／默认目标应用及 Via，排除本桌面和 Clash；并非杀掉 Android 全部后台进程。命令成功后展示派大星、“搞定了”和可选内置音效。
+- 清理操作强行停止配置／默认目标应用及 Via，排除本桌面和 Clash；并非杀掉 Android 全部后台进程。命令成功后展示派大星、`Apps Cleared` 和可选内置音效。
 - 壁纸为内置静态 XML 资源，默认纯黑，可选用户图片。电子书主题覆盖壁纸：普通版使用纸张背景，黑色版使用纯黑和降低亮度的灰阶渲染。
 - 内存芯片显示 `ActivityManager.MemoryInfo` 提供的整机占用，计算为 `(totalMem - availMem) / totalMem`，不是本应用占用。可用内存包括可回收内存。桌面处于恢复状态且屏幕可交互时每 10 秒刷新，熄屏／暂停停止轮询。
-- `IdlePower` 在两分钟无操作后调暗桌面，并响应输入、播放等本地事件。静态资源和有限轮询减少不必要工作，不代表零内存或零功耗。
+- 默认关闭 `FLAG_KEEP_SCREEN_ON`（省电策略中提供 `keep_screen_on` 可选常亮开关），交由系统休眠超时息屏。`IdlePower` 在两分钟无操作后调暗桌面，并响应输入、播放等本地事件；`WifiBeaconGuard` 可选在桌面可见时每 60 秒扫描指定 Wi-Fi SSID，连续缺失超时后弹出 5 秒倒计时并触发 `KEYCODE_SLEEP`。静态资源和有限轮询减少不必要工作，不代表零内存或零功耗。
 - `NetIndicators` 在右上角状态栏展示 Wi-Fi、蜂窝网络信号与实时上下行网速（`↑`/`↓`）。只要未开启飞行模式且检测到就绪 SIM 卡（或存在已连接的蜂窝网络），即使同时连接 Wi-Fi 或处于纯数据域驻网（`NetworkRegistrationInfo.isRegistered()`），也会显示 0～4 格信号与制式（`5G`/`4G`/`3G`/`2G`）；无服务时显示 0 格灰柱与 `×` 标记。实时网速直接调用 Android 系统底层的 `TrafficStats.getTotalTxBytes()` 与 `TrafficStats.getTotalRxBytes()`，仅在桌面处于前台（`start()`/`stop()`）时每秒采样一次，无需额外权限或 Root。正常进入桌面时会请求一次 `READ_PHONE_STATE` 权限，用于在 Android 11+ 读取 `TelephonyDisplayInfo`（含 5G NSA）及默认数据卡状态。
 - 在目标机型的 Android 11 原厂固件（一加 7T，系统数据库 `content://telephony/carriers`）中，已内置三大运营商配置，插卡默认即可使用：**中国联通（`46001`）** 内置 `3gnet`（`default,supl`）及 `ims`；**中国电信（`46003` / `46011`）** 内置 `ctnet`（`default,hipri,ia,supl`）及 `ims`；**中国移动（`46000`）** 内置 `cmnet`（`default,net,supl`）及 `ims`。由于该版系统固件发布早于中国广电（`46015`）2022 年正式放号，原厂 APN 与 IMS 表未收录 `46015`，容易出现 4G 满格但语音域 `OUT_OF_SERVICE`、数据拨号停在 `DATA_DISCONNECTED` 的情况；在系统“移动网络 -> 接入点名称 (APN)”中手动添加广电 APN（名称：`中国广电`，APN：`cbnet`，APN 类型：`default,supl`）并选中即可正常上网。
 

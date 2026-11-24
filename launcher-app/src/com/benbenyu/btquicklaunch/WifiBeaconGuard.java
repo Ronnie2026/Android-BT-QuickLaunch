@@ -108,6 +108,11 @@ final class WifiBeaconGuard {
     }
   }
 
+  void destroy() {
+    stop();
+    sleepExecutor.shutdownNow();
+  }
+
   void dismissCountdown() {
     handler.removeCallbacks(countdownTick);
     if (countdownDialog != null) {
@@ -270,19 +275,22 @@ final class WifiBeaconGuard {
   void triggerSystemSleep(String target, long missingMs) {
     AppLog.write(
         "WIFI_BEACON_SLEEP ssid=" + target + " missing_ms=" + missingMs, null);
-    sleepExecutor.execute(
-        () -> {
-          java.lang.Process p = null;
-          try {
-            p =
-                new ProcessBuilder("su", "-c", "input keyevent KEYCODE_SLEEP")
-                    .redirectErrorStream(true)
-                    .start();
-            if (!p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) p.destroy();
-          } catch (Exception e) {
-            AppLog.write("WIFI_BEACON_SLEEP_FAILED", e);
-          }
-        });
+    try {
+      sleepExecutor.execute(
+          () -> {
+            java.lang.Process p = null;
+            try {
+              p =
+                  new ProcessBuilder("su", "-c", "input keyevent KEYCODE_SLEEP")
+                      .redirectErrorStream(true)
+                      .start();
+              if (!p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) p.destroy();
+            } catch (Exception e) {
+              AppLog.write("WIFI_BEACON_SLEEP_FAILED", e);
+            }
+          });
+    } catch (java.util.concurrent.RejectedExecutionException ignored) {
+    }
   }
 
   static int clampTimeoutMinutes(int raw) {

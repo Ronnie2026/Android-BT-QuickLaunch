@@ -10,7 +10,10 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 
-/** Detects locally whether the Clash Meta VPN/proxy is active without making external requests. */
+/**
+ * Checks local Clash Meta VPN/proxy state and, when exit-region guard is enabled, probes exit IP
+ * country via the local Clash proxy port (with direct fallback for pure TUN setups).
+ */
 final class ProxyGuard {
   static final String CLASH = "com.github.metacubex.clash.meta";
   static final String ACTION_START = CLASH + ".action.START_CLASH";
@@ -155,15 +158,19 @@ final class ProxyGuard {
     }
   }
 
-  static boolean localPortOpen() {
+  static int findOpenLocalPort() {
     for (int port : LOCAL_PORTS) {
       try (java.net.Socket s = new java.net.Socket()) {
         s.connect(new java.net.InetSocketAddress("127.0.0.1", port), 300);
-        return true;
+        return port;
       } catch (Exception ignored) {
       }
     }
-    return false;
+    return -1;
+  }
+
+  static boolean localPortOpen() {
+    return findOpenLocalPort() > 0;
   }
 
   static boolean installed(Context c) {
@@ -280,6 +287,7 @@ final class ProxyGuard {
   }
 
   static ExitIpResult checkExitCountry() {
+    int proxyPort = findOpenLocalPort();
     String[] traceUrls = {
       "https://chatgpt.com/cdn-cgi/trace",
       "https://www.cloudflare.com/cdn-cgi/trace"
@@ -287,13 +295,9 @@ final class ProxyGuard {
     String lastErr = "";
     for (String url : traceUrls) {
       try {
-        String body = httpGet(url);
-        String loc = "";
-        String ip = "";
-        for (String line : body.split("\n")) {
-          if (line.startsWith("loc=")) loc = line.substring(4).trim();
-          else if (line.startsWith("ip=")) ip = line.substring(3).trim();
-        }
+        String body = httpGet(url, proxyPort);
+        String loc = parseTraceValue(body, "loc=");
+        String ip = parseTraceValue(body, "ip=");
         if (loc.length() == 2) {
           AppLog.write("PROXY_EXIT_IP reachable=true country=" + loc, null);
           return new ExitIpResult(true, loc.toUpperCase(java.util.Locale.ROOT), ip, "");
@@ -304,7 +308,7 @@ final class ProxyGuard {
       }
     }
     try {
-      String cc = httpGet("https://ipinfo.io/country").trim();
+      String cc = httpGet("https://ipinfo.io/country", proxyPort).trim();
       if (cc.length() == 2) {
         AppLog.write("PROXY_EXIT_IP reachable=true country=" + cc, null);
         return new ExitIpResult(true, cc.toUpperCase(java.util.Locale.ROOT), "", "");
@@ -316,10 +320,41 @@ final class ProxyGuard {
     return new ExitIpResult(false, "", "", lastErr);
   }
 
-  private static String httpGet(String urlStr) throws Exception {
+  static String parseTraceValue(String body, String prefix) {
+    if (body == null || prefix == null) return "";
+    for (String line : body.split("\n")) {
+      if (line.startsWith(prefix)) return line.substring(prefix.length()).trim();
+    }
+    return "";
+  }
+
+  private static String httpGet(String urlStr, int localProxyPort) throws Exception {
+    if (localProxyPort > 0) {
+      try {
+        java.net.Proxy proxy =
+            new java.net.Proxy(
+                java.net.Proxy.Type.HTTP,
+                new java.net.InetSocketAddress("127.0.0.1", localProxyPort));
+        return httpGetOnce(urlStr, proxy);
+      } catch (Exception proxyErr) {
+        // Fall back to default route if local port is SOCKS-only or rejects HTTP CONNECT.
+        try {
+          return httpGetOnce(urlStr, null);
+        } catch (Exception ignored) {
+          throw proxyErr;
+        }
+      }
+    }
+    return httpGetOnce(urlStr, null);
+  }
+
+  private static String httpGetOnce(String urlStr, java.net.Proxy proxy) throws Exception {
     java.net.HttpURLConnection conn = null;
     try {
-      conn = (java.net.HttpURLConnection) new java.net.URL(urlStr).openConnection();
+      java.net.URL url = new java.net.URL(urlStr);
+      conn =
+          (java.net.HttpURLConnection)
+              (proxy != null ? url.openConnection(proxy) : url.openConnection());
       conn.setConnectTimeout(2500);
       conn.setReadTimeout(2500);
       conn.setRequestProperty("User-Agent", "BT-QuickLaunch");

@@ -2,7 +2,7 @@
 
 [简体中文](PROJECT_CONTEXT.zh-CN.md)
 
-Implementation baseline: v1.8.0. This document describes the shipped code, not a promise about future third-party app versions.
+Implementation baseline: v1.8.5. This document describes the shipped code, not a promise about future third-party app versions.
 
 ## Purpose and operating environment
 
@@ -16,7 +16,7 @@ Package: `com.benbenyu.btquicklaunch`. Device-specific keyboard configuration li
 
 1. `ButtonService` is an Android accessibility service. It filters number keys 1/2/3 from the configured external keyboard; a double press selects the corresponding first three slots. Pressing all three keys requests cleanup.
 2. The service wakes the phone and delivers `button_action` to `MainActivity`. Slot actions follow saved configuration, including target package, optional prerequisite app, delay and automatic voice preference.
-3. For guarded apps, `ProxyGuard` checks local network/VPN/Clash state. It can start Clash and recheck, without contacting an external test server. These checks do not prove the target service is reachable or the account has quota.
+3. For guarded apps, `ProxyGuard` checks local network/VPN/Clash state (starting Clash and rechecking if needed) and, when exit-region verification (`proxy_require_jp`) is enabled, probes exit IP country (`chatgpt.com/cdn-cgi/trace`, `cloudflare.com/cdn-cgi/trace`, or `ipinfo.io/country`, preferring the local Clash proxy port so per-app VPN setups still test the proxy exit) against configured safe regions before opening. These checks still do not prove account quota.
 4. If automatic voice entry is enabled for a supported target, the activity starts a bounded accessibility search while launching it. GPT also uses the package-scoped `https://chatgpt.com/voice` intent.
 5. Voice matching is limited to the target app's package. Gemini is launched through `com.google.android.apps.bard`, but its visible UI may belong to `com.google.android.googlequicksearchbox`.
 
@@ -72,10 +72,10 @@ Image recognition, OCR and fixed/proportional coordinate matching are not implem
 ## Desktop feedback and resource use
 
 - Home icons use a uniform circular mask. An orange ring represents a detected running package/process, not verified app health or an active voice session. Matching follows the package when slots move.
-- Cleanup force-stops configured/default target apps and Via, excluding this launcher and Clash. It is not a universal kill of every Android background process. Successful command completion displays Patrick Star, 搞定了 and an optional bundled tone.
+- Cleanup force-stops configured/default target apps and Via, excluding this launcher and Clash. It is not a universal kill of every Android background process. Successful command completion displays Patrick Star, `Apps Cleared` and an optional bundled tone.
 - Wallpapers are packaged static XML resources, with pure black as the default and optional user-selected image files. E-book themes override the wallpaper: normal mode uses a paper background; black mode uses pure black and dimmed grayscale rendering.
 - The RAM chip shows whole-device usage from `ActivityManager.MemoryInfo`, calculated as `(totalMem - availMem) / totalMem`, not the launcher's own memory. Available RAM includes reclaimable memory. It refreshes every ten seconds while resumed and interactive; screen-off/pause stops polling.
-- `IdlePower` dims the launcher after two minutes of inactivity and responds to input, playback and other local events. Static resources and bounded polling reduce unnecessary work; they do not imply zero memory or zero power use.
+- `FLAG_KEEP_SCREEN_ON` is off by default (`keep_screen_on` optional switch in Power Strategy) so Android's system sleep timeout can turn off the screen. `IdlePower` dims the launcher after two minutes of inactivity and responds to input, playback and other local events; `WifiBeaconGuard` optionally scans a target Wi-Fi SSID every 60 seconds while resumed and shows a 5-second countdown before `KEYCODE_SLEEP` when absent. Static resources and bounded polling reduce unnecessary work; they do not imply zero memory or zero power use.
 - `NetIndicators` shows Wi-Fi, cellular signal status, and live uplink/downlink traffic speed (`↑`/`↓`) in the top-right bar. When airplane mode is off and a ready SIM (or active cellular network) is detected, cellular signal bars (0–4) and generation (`5G`/`4G`/`3G`/`2G`) remain visible even while Wi-Fi is connected or when only packet-switched data is registered (`NetworkRegistrationInfo.isRegistered()`). Out-of-service state renders zero lit bars with an `×` mark. Real-time speed reads Android's `TrafficStats.getTotalTxBytes()` and `TrafficStats.getTotalRxBytes()` every second only while the launcher is resumed (`start()`/`stop()`), requiring no extra permissions or Root. On Android 11+, `READ_PHONE_STATE` is requested once on normal launcher startup so `TelephonyDisplayInfo` (including 5G NSA) and active data subscription info can be read.
 - On older Android 11 ROMs (such as OnePlus 7T stock firmware), built-in APN records (`content://telephony/carriers`) already cover the three major carriers out of the box—China Unicom (`46001`: `3gnet` `default,supl` + `ims`), China Telecom (`46003` / `46011`: `ctnet` `default,hipri,ia,supl` + `ims`), and China Mobile (`46000`: `cmnet` `default,net,supl` + `ims`)—so those SIM cards work without manual APN setup. Because this Android 11 firmware predates China Broadnet's (`46015`) 2022 commercial launch, `46015` is missing from the factory APN/IMS tables, which can leave voice `OUT_OF_SERVICE` and cellular data stuck at `DATA_DISCONNECTED` despite full 4G bars; adding a manual APN (`Name: 中国广电`, `APN: cbnet`, `Type: default,supl`) in system Mobile Network settings resolves data connectivity.
 
