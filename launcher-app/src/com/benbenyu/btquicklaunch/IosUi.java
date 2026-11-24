@@ -159,11 +159,15 @@ final class IosUi {
     label.setText(title);
     label.setTextSize(16);
     label.setTextColor(blueTitle ? accent(paper) : textPrimary(paper));
-    row.addView(label, new LinearLayout.LayoutParams(0, -2, 1));
+    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1f);
+    row.addView(label, lp);
     if (value != null && !value.isEmpty()) {
       TextView val = new TextView(c);
       val.setText(value);
-      val.setTextSize(15);
+      val.setTextSize(14);
+      val.setGravity(Gravity.END);
+      val.setMaxWidth(c.getResources().getDisplayMetrics().widthPixels * 46 / 100);
+      val.setEllipsize(android.text.TextUtils.TruncateAt.END);
       val.setTextColor(textSecondary(paper));
       val.setPadding(dp(c, 8), 0, dp(c, 6), 0);
       row.addView(val);

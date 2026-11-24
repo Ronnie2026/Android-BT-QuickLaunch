@@ -42,6 +42,7 @@ public class ButtonService extends AccessibilityService {
 
   protected void onServiceConnected() {
     instance = this;
+    SmsBarkForwarder.ensureWatching(this);
     if(hid==null){hid=new HidConnectionManager(this);hid.start();}
     if (bluetoothEvents == null) {
       bluetoothEvents =

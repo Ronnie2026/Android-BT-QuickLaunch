@@ -72,13 +72,13 @@ final class ConfigBackup {
     while (keys.hasNext()) {
       String key = keys.next();
       if (!key.matches(
-          "[0-3](name|pkg|before|delay|voice|icon)|background|wallpaper|brightness|breathing|paper_theme|paper_dark|idle_power|keep_screen_on|wifi_beacon_sleep|wifi_beacon_ssid|wifi_beacon_timeout|show_mobile_signal|show_wifi|show_bluetooth|show_hid_battery|show_power|show_net_speed|show_memory|show_vpn_status|show_accessibility_status|show_bt_audio|show_temperature|proxy_guard|proxy_on_boot|proxy_require_jp|proxy_allowed_regions|proxy_apps|auto_update_check|update_source_mode|update_gitee_repo|disable_ime|bt_connect_sound|reminder_enabled|reminder_media|reminder_keyboard_connected|reminder_keyboard_disconnected|reminder_keyboard_low|reminder_phone_low|clean_success_sound|clean_success_tone|reminder_tone|reminder_(keyboard_(connected|disconnected|low)|phone_low)_(media|tone)"))
+          "[0-3](name|pkg|before|delay|voice|icon)|background|wallpaper|brightness|breathing|paper_theme|paper_dark|idle_power|keep_screen_on|wifi_beacon_sleep|wifi_beacon_ssid|wifi_beacon_timeout|show_mobile_signal|show_wifi|show_bluetooth|show_hid_battery|show_power|show_net_speed|show_memory|show_vpn_status|show_accessibility_status|show_bt_audio|show_temperature|proxy_guard|proxy_on_boot|proxy_require_jp|proxy_allowed_regions|proxy_apps|sms_bark_enabled|sms_bark_endpoint|sms_webhook_enabled|sms_webhook_url|sms_bark_source|sms_bark_ttl|auto_update_check|update_source_mode|update_gitee_repo|disable_ime|bt_connect_sound|reminder_enabled|reminder_media|reminder_keyboard_connected|reminder_keyboard_disconnected|reminder_keyboard_low|reminder_phone_low|clean_success_sound|clean_success_tone|reminder_tone|reminder_(keyboard_(connected|disconnected|low)|phone_low)_(media|tone)"))
         continue;
       Object value = j.get(key);
       boolean boolKey =
-          key.matches("reminder_(enabled|keyboard_connected|keyboard_disconnected|keyboard_low|phone_low)|show_(mobile_signal|wifi|bluetooth|hid_battery|power|net_speed|memory|vpn_status|accessibility_status|bt_audio|temperature)") || key.equals("clean_success_sound") || key.endsWith("voice") || (key.equals("proxy_guard") || key.equals("proxy_on_boot") || key.equals("proxy_require_jp")) || key.equals("breathing") || key.equals("paper_theme") || key.equals("paper_dark") || key.equals("idle_power") || key.equals("keep_screen_on") || key.equals("wifi_beacon_sleep") || key.equals("auto_update_check") || key.equals("disable_ime") || key.equals("bt_connect_sound");
+          key.matches("reminder_(enabled|keyboard_connected|keyboard_disconnected|keyboard_low|phone_low)|show_(mobile_signal|wifi|bluetooth|hid_battery|power|net_speed|memory|vpn_status|accessibility_status|bt_audio|temperature)") || key.equals("clean_success_sound") || key.endsWith("voice") || (key.equals("proxy_guard") || key.equals("proxy_on_boot") || key.equals("proxy_require_jp")) || key.equals("breathing") || key.equals("paper_theme") || key.equals("paper_dark") || key.equals("idle_power") || key.equals("keep_screen_on") || key.equals("wifi_beacon_sleep") || key.equals("sms_bark_enabled") || key.equals("sms_webhook_enabled") || key.equals("auto_update_check") || key.equals("disable_ime") || key.equals("bt_connect_sound");
       boolean intKey =
-          key.endsWith("delay") || key.equals("background") || key.equals("brightness") || key.equals("wifi_beacon_timeout") || key.equals("update_source_mode");
+          key.endsWith("delay") || key.equals("background") || key.equals("brightness") || key.equals("wifi_beacon_timeout") || key.equals("sms_bark_ttl") || key.equals("update_source_mode");
       if (boolKey && !(value instanceof Boolean)
           || intKey && !(value instanceof Integer)
           || (!boolKey && !intKey && !(value instanceof String))) throw new IOException("配置字段类型无效");
@@ -89,11 +89,20 @@ final class ConfigBackup {
       if (key.equals("background") && ((Integer) value < 0 || (Integer) value > 8)
           || key.equals("brightness") && ((Integer) value < 0 || (Integer) value > 100)
           || key.equals("wifi_beacon_timeout") && ((Integer) value < 1 || (Integer) value > 30)
+          || key.equals("sms_bark_ttl") && ((Integer) value < 60 || (Integer) value > 86400)
           || key.equals("update_source_mode") && ((Integer) value < 0 || (Integer) value > 1)
           || key.endsWith("delay") && ((Integer) value < 1000 || (Integer) value > 10000))
         throw new IOException("配置数值超出范围");
       if (value instanceof String && value.toString().length() > 1024)
         throw new IOException("配置文本过长");
+      if (key.equals("sms_bark_endpoint")
+          && !value.toString().isEmpty()
+          && SmsBarkForwarder.normalizeEndpoint(value.toString()).isEmpty())
+        throw new IOException("Bark 地址配置无效");
+      if (key.equals("sms_webhook_url")
+          && !value.toString().isEmpty()
+          && SmsBarkForwarder.normalizeWebhookUrl(value.toString()).isEmpty())
+        throw new IOException("Webhook 地址配置无效");
       if (key.equals("proxy_allowed_regions")
           && !value.toString().matches("([A-Za-z]{2}(\\s*,\\s*[A-Za-z]{2})*)?"))
         throw new IOException("节点区域配置无效");

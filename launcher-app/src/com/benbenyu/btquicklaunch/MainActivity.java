@@ -372,6 +372,7 @@ public class MainActivity extends Activity {
       java.util.concurrent.Executors.newSingleThreadExecutor();
   static final int REQ_PHONE_STATE_PERM = 101;
   static final int REQ_WIFI_BEACON_LOCATION_PERM = 102;
+  static final int REQ_SMS_PERM = 103;
   int launchGeneration = 0;
   boolean cleaning = false;
   int queuedSlot = -1;
@@ -516,7 +517,174 @@ public class MainActivity extends Activity {
       } else {
         Toast.makeText(this, "需要定位权限才能扫描附近 Wi-Fi SSID", 1).show();
       }
+    } else if (requestCode == REQ_SMS_PERM) {
+      boolean granted = true;
+      for (int r : grantResults) {
+        if (r != PackageManager.PERMISSION_GRANTED) granted = false;
+      }
+      if (granted && grantResults.length > 0) {
+        SmsBarkForwarder.onPreferencesUpdated(this);
+        Toast.makeText(this, "短信读取与监听权限已开启", 0).show();
+      } else {
+        Toast.makeText(this, "需要短信权限才能自动接收并转发到 Bark", 1).show();
+      }
     }
+  }
+
+  void ensureSmsPermissions() {
+    boolean rx =
+        checkSelfPermission(android.Manifest.permission.RECEIVE_SMS)
+            == PackageManager.PERMISSION_GRANTED;
+    boolean rd =
+        checkSelfPermission(android.Manifest.permission.READ_SMS)
+            == PackageManager.PERMISSION_GRANTED;
+    if (rx && rd) return;
+    requestPermissions(
+        new String[] {
+          android.Manifest.permission.RECEIVE_SMS, android.Manifest.permission.READ_SMS
+        },
+        REQ_SMS_PERM);
+  }
+
+  boolean isPortrait() {
+    return getResources().getConfiguration().orientation
+        == android.content.res.Configuration.ORIENTATION_PORTRAIT;
+  }
+
+  public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+    super.onConfigurationChanged(newConfig);
+    boolean wasGearOpen = gearMenuDialog != null && gearMenuDialog.isShowing();
+    if (wasGearOpen) gearMenuDialog.dismiss();
+    boolean wasSettingsOpen = settingsDialog != null && settingsDialog.isShowing();
+    if (wasSettingsOpen) settingsDialog.dismiss();
+    draw();
+    if (wasSettingsOpen) settingsPanel();
+    else if (wasGearOpen) showGearMenu();
+    getWindow().getDecorView().setSystemUiVisibility(5894);
+  }
+
+  void editSmsBarkEndpoint(final TextView outVal, final Runnable onSaved) {
+    final EditText input = new EditText(this);
+    input.setSingleLine(true);
+    input.setHint("https://api.day.app/<你的Key> 或直接填 Key");
+    input.setText(p.getString(SmsBarkForwarder.PREF_ENDPOINT, ""));
+    input.setSelection(input.getText().length());
+    new AlertDialog.Builder(this)
+        .setTitle("1. Bark 推送配置（苹果手机推送通道）")
+        .setMessage("填入 Bark 推送地址（如 https://api.day.app/xxxx）或直接输入设备 Key：")
+        .setView(input)
+        .setPositiveButton(
+            "保存",
+            (d, w) -> {
+              String raw = input.getText().toString().trim();
+              if (raw.isEmpty()) {
+                p.edit().putString(SmsBarkForwarder.PREF_ENDPOINT, "").apply();
+                outVal.setText(SmsBarkForwarder.maskEndpoint(""));
+                if (onSaved != null) onSaved.run();
+                return;
+              }
+              String norm = SmsBarkForwarder.normalizeEndpoint(raw);
+              if (norm.isEmpty()) {
+                Toast.makeText(this, "Bark 地址或 Key 格式无效", 1).show();
+                return;
+              }
+              p.edit().putString(SmsBarkForwarder.PREF_ENDPOINT, norm).apply();
+              outVal.setText(SmsBarkForwarder.maskEndpoint(norm));
+              SmsBarkForwarder.onPreferencesUpdated(this);
+              if (onSaved != null) onSaved.run();
+            })
+        .setNegativeButton("取消", null)
+        .show();
+  }
+
+  void editSmsWebhookUrl(final TextView outVal, final Runnable onSaved) {
+    final EditText input = new EditText(this);
+    input.setSingleLine(true);
+    input.setHint("https://example.com/webhook");
+    input.setText(p.getString(SmsBarkForwarder.PREF_WEBHOOK_URL, ""));
+    input.setSelection(input.getText().length());
+    new AlertDialog.Builder(this)
+        .setTitle("2. Webhook 推送配置")
+        .setMessage("填入接收短信通知的 HTTP/HTTPS Webhook 地址（自动兼容飞书/企微/钉钉及通用 JSON）：")
+        .setView(input)
+        .setPositiveButton(
+            "保存",
+            (d, w) -> {
+              String raw = input.getText().toString().trim();
+              if (raw.isEmpty()) {
+                p.edit().putString(SmsBarkForwarder.PREF_WEBHOOK_URL, "").apply();
+                outVal.setText(SmsBarkForwarder.maskWebhookUrl(""));
+                if (onSaved != null) onSaved.run();
+                return;
+              }
+              String norm = SmsBarkForwarder.normalizeWebhookUrl(raw);
+              if (norm.isEmpty()) {
+                Toast.makeText(this, "Webhook URL 格式无效（需以 http:// 或 https:// 开头）", 1).show();
+                return;
+              }
+              p.edit().putString(SmsBarkForwarder.PREF_WEBHOOK_URL, norm).apply();
+              outVal.setText(SmsBarkForwarder.maskWebhookUrl(norm));
+              SmsBarkForwarder.onPreferencesUpdated(this);
+              if (onSaved != null) onSaved.run();
+            })
+        .setNegativeButton("取消", null)
+        .show();
+  }
+
+  TextView createActionPill(String label, boolean paper) {
+    TextView btn = new TextView(this);
+    btn.setText(label);
+    btn.setTextSize(13);
+    btn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+    btn.setGravity(Gravity.CENTER);
+    btn.setPadding(dp(12), dp(6), dp(12), dp(6));
+    btn.setTextColor(IosUi.textPrimary(paper));
+    btn.setBackground(IosUi.roundRect(IosUi.pillColor(paper), 8, this));
+    return btn;
+  }
+
+  void updateChannelButtons(
+      boolean enabled,
+      boolean configured,
+      boolean paper,
+      TextView stateLabel,
+      TextView btnOn,
+      TextView btnOff) {
+    boolean active = enabled && configured;
+    stateLabel.setText(
+        enabled ? (configured ? "当前：已开启" : "当前：已开启（待填地址）") : "当前：已关闭");
+    stateLabel.setTextColor(
+        active
+            ? (paper ? 0xff1d7a46 : 0xff62d492)
+            : enabled ? (paper ? 0xffb36b00 : 0xfff5a623) : IosUi.textSecondary(paper));
+    btnOn.setBackground(
+        IosUi.roundRect(enabled ? IosUi.accent(paper) : IosUi.pillColor(paper), 8, this));
+    btnOn.setTextColor(enabled ? 0xffffffff : IosUi.textPrimary(paper));
+    btnOff.setBackground(
+        IosUi.roundRect(
+            !enabled ? (paper ? 0xff6c6c70 : 0xff48484a) : IosUi.pillColor(paper), 8, this));
+    btnOff.setTextColor(!enabled ? 0xffffffff : IosUi.textSecondary(paper));
+  }
+
+  void editSmsBarkSource(final TextView outVal) {
+    final EditText input = new EditText(this);
+    input.setSingleLine(true);
+    input.setText(SmsBarkForwarder.resolveSourceTag(p));
+    input.setSelection(input.getText().length());
+    new AlertDialog.Builder(this)
+        .setTitle("推送来源标记")
+        .setMessage("会同时作为 Bark 通知副标题、分组（group）及正文尾注展示：")
+        .setView(input)
+        .setPositiveButton(
+            "保存",
+            (d, w) -> {
+              String next = input.getText().toString().trim();
+              if (next.isEmpty()) next = SmsBarkForwarder.DEFAULT_SOURCE;
+              p.edit().putString(SmsBarkForwarder.PREF_SOURCE, next).apply();
+              outVal.setText(next);
+            })
+        .setNegativeButton("取消", null)
+        .show();
   }
 
   protected void onNewIntent(Intent in) {
@@ -544,68 +712,121 @@ public class MainActivity extends Activity {
   }
 
   public boolean dispatchTouchEvent(android.view.MotionEvent e){if(e.getActionMasked()==android.view.MotionEvent.ACTION_DOWN&&idlePower!=null)idlePower.activity("touch");return super.dispatchTouchEvent(e);}
+  FrameLayout createDesktopSlotCell(final int n, boolean portrait) {
+    FrameLayout cell = new FrameLayout(this);
+    ImageView icon = n < 4 ? new CircularIconView(this) : new ImageView(this);
+    icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+    icon.setContentDescription(n == 4 ? "清后台" : get(n, "name", names[n]));
+    try {
+      if (n == 4) throw new Exception();
+      icon.setImageDrawable(slotIcon(n));
+    } catch (Exception e) {
+      icon.setImageResource(
+          n == 4
+              ? android.R.drawable.ic_menu_close_clear_cancel
+              : android.R.drawable.sym_def_app_icon);
+    }
+    if (p.getBoolean("paper_theme", false)) {
+      android.graphics.ColorMatrix mono = new android.graphics.ColorMatrix();
+      mono.setSaturation(0);
+      icon.setColorFilter(new android.graphics.ColorMatrixColorFilter(mono));
+    }
+    FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(-1, -1, Gravity.CENTER);
+    if (portrait) {
+      int m = n == 4 ? dp(18) : dp(22);
+      ip.setMargins(m, m, m, m);
+    } else {
+      ip.setMargins(dp(18), dp(30), dp(18), dp(30));
+    }
+    cell.addView(icon, ip);
+    if (n < 4) activityIcons[n] = (CircularIconView) icon;
+    cell.setOnLongClickListener(
+        v -> {
+          if (n < 4) reorder(n);
+          else clean();
+          return true;
+        });
+    cell.setOnClickListener(
+        v -> {
+          if (n == 4) {
+            long now = android.os.SystemClock.elapsedRealtime();
+            if (lastCleanTap != 0 && now - lastCleanTap < 450) {
+              lastCleanTap = 0;
+              clean();
+            } else lastCleanTap = now;
+          } else launch(n);
+        });
+    return cell;
+  }
+
   void draw() {
     clearCleanFeedback();
     for (CircularIconView icon : activityIcons) if (icon != null) icon.stopPulse();
     if (networkIndicators != null) networkIndicators.stop();
+    boolean portrait = isPortrait();
     FrameLayout root = new FrameLayout(this);
     desktopRoot = root;
     root.setBackgroundColor(Color.BLACK);
     setContentView(root);
     background(root);
-    LinearLayout row = new LinearLayout(this);
-    row.setGravity(Gravity.CENTER);
-    row.setPadding(dp(16), dp(52), dp(16), dp(12));
-    root.addView(row, new FrameLayout.LayoutParams(-1, -1));
-    for (int i = 0; i < 5; i++) {
-      final int n = i;
-      FrameLayout cell = new FrameLayout(this);
-      row.addView(cell, new LinearLayout.LayoutParams(0, -1, 1));
-      ImageView icon = i < 4 ? new CircularIconView(this) : new ImageView(this);
-      icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-      icon.setContentDescription(i == 4 ? "清后台" : get(i, "name", names[i]));
-      try {
-        if (i == 4) throw new Exception();
-        icon.setImageDrawable(slotIcon(i));
-      } catch (Exception e) {
-        icon.setImageResource(
-            i == 4
-                ? android.R.drawable.ic_menu_close_clear_cancel
-                : android.R.drawable.sym_def_app_icon);
+    if (!portrait) {
+      LinearLayout row = new LinearLayout(this);
+      row.setGravity(Gravity.CENTER);
+      row.setPadding(dp(16), dp(52), dp(16), dp(12));
+      root.addView(row, new FrameLayout.LayoutParams(-1, -1));
+      for (int i = 0; i < 5; i++) {
+        row.addView(createDesktopSlotCell(i, false), new LinearLayout.LayoutParams(0, -1, 1));
       }
-      if (p.getBoolean("paper_theme", false)) {
-        android.graphics.ColorMatrix mono = new android.graphics.ColorMatrix();
-        mono.setSaturation(0);
-        icon.setColorFilter(new android.graphics.ColorMatrixColorFilter(mono));
+    } else {
+      LinearLayout col = new LinearLayout(this);
+      col.setOrientation(LinearLayout.VERTICAL);
+      col.setGravity(Gravity.CENTER);
+      col.setPadding(dp(20), dp(96), dp(20), dp(28));
+      root.addView(col, new FrameLayout.LayoutParams(-1, -1));
+      for (int r = 0; r < 2; r++) {
+        LinearLayout line = new LinearLayout(this);
+        line.setGravity(Gravity.CENTER);
+        col.addView(line, new LinearLayout.LayoutParams(-1, 0, 1f));
+        for (int c = 0; c < 2; c++) {
+          line.addView(
+              createDesktopSlotCell(r * 2 + c, true), new LinearLayout.LayoutParams(0, -1, 1f));
+        }
       }
-      FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(-1, -1, Gravity.CENTER);
-      ip.setMargins(dp(18), dp(30), dp(18), dp(30));
-      cell.addView(icon, ip);
-      if (i < 4) activityIcons[i] = (CircularIconView) icon;
-      cell.setOnLongClickListener(
-          v -> {
-            if (n < 4) reorder(n);
-            else clean();
-            return true;
-          });
-      cell.setOnClickListener(
-          v -> {
-            if (n == 4) {
-              long now = android.os.SystemClock.elapsedRealtime();
-              if (lastCleanTap != 0 && now - lastCleanTap < 450) {
-                lastCleanTap = 0;
-                clean();
-              } else lastCleanTap = now;
-            } else launch(n);
-          });
+      FrameLayout cleanHolder = new FrameLayout(this);
+      LinearLayout.LayoutParams chLp = new LinearLayout.LayoutParams(-1, dp(112));
+      chLp.topMargin = dp(8);
+      col.addView(cleanHolder, chLp);
+      FrameLayout cleanCell = createDesktopSlotCell(4, true);
+      cleanHolder.addView(cleanCell, new FrameLayout.LayoutParams(dp(112), dp(112), Gravity.CENTER));
     }
+
     LinearLayout statusBar = new LinearLayout(this);
-    statusBar.setGravity(Gravity.CENTER_VERTICAL);
-    FrameLayout.LayoutParams statusParams =
-        new FrameLayout.LayoutParams(-2, dp(36), Gravity.TOP | Gravity.RIGHT);
-    statusParams.topMargin = dp(10);
-    statusParams.rightMargin = dp(12);
-    root.addView(statusBar, statusParams);
+    statusBar.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+    LinearLayout statusRow2 = null;
+    if (!portrait) {
+      FrameLayout.LayoutParams statusParams =
+          new FrameLayout.LayoutParams(-2, dp(36), Gravity.TOP | Gravity.RIGHT);
+      statusParams.topMargin = dp(10);
+      statusParams.rightMargin = dp(12);
+      root.addView(statusBar, statusParams);
+    } else {
+      LinearLayout statusWrap = new LinearLayout(this);
+      statusWrap.setOrientation(LinearLayout.VERTICAL);
+      statusWrap.setGravity(Gravity.RIGHT);
+      FrameLayout.LayoutParams wrapParams =
+          new FrameLayout.LayoutParams(-1, -2, Gravity.TOP | Gravity.RIGHT);
+      wrapParams.topMargin = dp(10);
+      wrapParams.leftMargin = dp(8);
+      wrapParams.rightMargin = dp(10);
+      statusWrap.addView(statusBar, new LinearLayout.LayoutParams(-2, dp(36)));
+      statusRow2 = new LinearLayout(this);
+      statusRow2.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+      LinearLayout.LayoutParams r2Lp = new LinearLayout.LayoutParams(-2, dp(34));
+      r2Lp.topMargin = dp(2);
+      statusWrap.addView(statusRow2, r2Lp);
+      root.addView(statusWrap, wrapParams);
+    }
+    LinearLayout resourceBar = statusRow2 != null ? statusRow2 : statusBar;
 
     boolean paper = lightPaper();
     if (memoryIndicator != null) memoryIndicator.stop();
@@ -615,7 +836,7 @@ public class MainActivity extends Activity {
     memoryIndicator.setVisibility(showMemory ? View.VISIBLE : View.GONE);
     LinearLayout.LayoutParams memoryParams = new LinearLayout.LayoutParams(-2, dp(36));
     memoryParams.rightMargin = dp(8);
-    statusBar.addView(memoryIndicator, memoryParams);
+    resourceBar.addView(memoryIndicator, memoryParams);
     if (desktopVisible && showMemory) memoryIndicator.start();
 
     vpnIcon = new StatusGlyph(this, 4);
@@ -676,7 +897,7 @@ public class MainActivity extends Activity {
     batteryText.paper = paper;
     LinearLayout.LayoutParams batteryParams = new LinearLayout.LayoutParams(dp(36), dp(36));
     batteryParams.leftMargin = dp(4);
-    statusBar.addView(batteryText, batteryParams);
+    resourceBar.addView(batteryText, batteryParams);
 
     boolean showPower = p.getBoolean("show_power", true);
     boolean showTemp = p.getBoolean("show_temperature", true);
@@ -685,7 +906,7 @@ public class MainActivity extends Activity {
     LinearLayout.LayoutParams powerParams = new LinearLayout.LayoutParams(-2, dp(36));
     powerParams.leftMargin = dp(2);
     powerParams.rightMargin = dp(2);
-    statusBar.addView(powerIndicator, powerParams);
+    resourceBar.addView(powerIndicator, powerParams);
     if (desktopVisible && (showPower || showTemp)) powerIndicator.start();
 
     btAudioIcon = new StatusGlyph(this, 6);
@@ -942,71 +1163,91 @@ public class MainActivity extends Activity {
     dialog.getWindow().getDecorView().setSystemUiVisibility(5894);
   }
 
+  LinearLayout createAppSlotSettingCard(final int n, Dialog dialog, boolean paper) {
+    LinearLayout card = new LinearLayout(this);
+    card.setGravity(Gravity.CENTER_VERTICAL);
+    card.setPadding(dp(18), dp(10), dp(14), dp(10));
+    card.setBackground(IosUi.roundRect(IosUi.cardColor(paper), 18, this));
+    ImageView icon = new CircularIconView(this);
+    icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+    try {
+      icon.setImageDrawable(slotIcon(n));
+    } catch (Exception ignored) {
+      icon.setImageResource(android.R.drawable.sym_def_app_icon);
+    }
+    if (paper) {
+      android.graphics.ColorMatrix gray = new android.graphics.ColorMatrix();
+      gray.setSaturation(0);
+      icon.setColorFilter(new android.graphics.ColorMatrixColorFilter(gray));
+    }
+    card.addView(icon, new LinearLayout.LayoutParams(dp(50), dp(50)));
+    LinearLayout info = new LinearLayout(this);
+    info.setOrientation(1);
+    info.setPadding(dp(14), 0, dp(8), 0);
+    card.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
+    TextView label = new TextView(this);
+    label.setText("位置 " + (n + 1) + " · " + get(n, "name", names[n]));
+    label.setTextSize(17);
+    label.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+    label.setTextColor(IosUi.textPrimary(paper));
+    info.addView(label);
+    String pkgName = get(n, "pkg", pkgs[n]);
+    TextView hint = new TextView(this);
+    hint.setText(
+        supportsVoice(pkgName) && p.getBoolean(n + "voice", true)
+            ? (needsProxy(n, pkgName) ? "VPN 检测 · 自动语音" : "自动进入语音通话")
+            : needsProxy(n, pkgName) ? "VPN 检测 · 点击更换" : "点击更换应用");
+    hint.setTextSize(13);
+    hint.setTextColor(IosUi.textSecondary(paper));
+    hint.setPadding(0, dp(2), 0, 0);
+    info.addView(hint);
+    card.setOnClickListener(
+        v -> {
+          dialog.dismiss();
+          pick(n, false);
+        });
+    TextView more = new TextView(this);
+    more.setText("⋯");
+    more.setTextSize(20);
+    more.setGravity(Gravity.CENTER);
+    more.setTextColor(IosUi.accent(paper));
+    more.setBackground(IosUi.roundRect(IosUi.pillColor(paper), 16, this));
+    more.setContentDescription("位置" + (n + 1) + "高级设置");
+    more.setOnClickListener(
+        v -> {
+          dialog.dismiss();
+          iconMenu(n);
+        });
+    card.addView(more, new LinearLayout.LayoutParams(dp(36), dp(36)));
+    return card;
+  }
+
   void fillApps(LinearLayout grid, Dialog dialog) {
     boolean paper = lightPaper();
+    if (isPortrait()) {
+      ScrollView scroll = new ScrollView(this);
+      LinearLayout list = new LinearLayout(this);
+      list.setOrientation(LinearLayout.VERTICAL);
+      scroll.addView(list, new FrameLayout.LayoutParams(-1, -2));
+      grid.addView(scroll, new LinearLayout.LayoutParams(-1, -1));
+      for (int n = 0; n < 4; n++) {
+        LinearLayout card = createAppSlotSettingCard(n, dialog, paper);
+        card.setMinimumHeight(dp(96));
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
+        cp.setMargins(dp(4), dp(6), dp(4), dp(6));
+        list.addView(card, cp);
+      }
+      return;
+    }
     for (int row = 0; row < 2; row++) {
       LinearLayout line = new LinearLayout(this);
       grid.addView(line, new LinearLayout.LayoutParams(-1, 0, 1));
       for (int col = 0; col < 2; col++) {
         final int n = row * 2 + col;
-        LinearLayout card = new LinearLayout(this);
-        card.setGravity(Gravity.CENTER_VERTICAL);
-        card.setPadding(dp(18), dp(10), dp(14), dp(10));
-        card.setBackground(IosUi.roundRect(IosUi.cardColor(paper), 18, this));
+        LinearLayout card = createAppSlotSettingCard(n, dialog, paper);
         LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(0, -1, 1);
         cp.setMargins(dp(5), dp(5), dp(5), dp(5));
         line.addView(card, cp);
-        ImageView icon = new CircularIconView(this);
-        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        try {
-          icon.setImageDrawable(slotIcon(n));
-        } catch (Exception ignored) {
-          icon.setImageResource(android.R.drawable.sym_def_app_icon);
-        }
-        if (paper) {
-          android.graphics.ColorMatrix gray = new android.graphics.ColorMatrix();
-          gray.setSaturation(0);
-          icon.setColorFilter(new android.graphics.ColorMatrixColorFilter(gray));
-        }
-        card.addView(icon, new LinearLayout.LayoutParams(dp(50), dp(50)));
-        LinearLayout info = new LinearLayout(this);
-        info.setOrientation(1);
-        info.setPadding(dp(14), 0, dp(8), 0);
-        card.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView label = new TextView(this);
-        label.setText("位置 " + (n + 1) + " · " + get(n, "name", names[n]));
-        label.setTextSize(17);
-        label.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        label.setTextColor(IosUi.textPrimary(paper));
-        info.addView(label);
-        String pkgName = get(n, "pkg", pkgs[n]);
-        TextView hint = new TextView(this);
-        hint.setText(
-            supportsVoice(pkgName) && p.getBoolean(n + "voice", true)
-                ? (needsProxy(n, pkgName) ? "VPN 检测 · 自动语音" : "自动进入语音通话")
-                : needsProxy(n, pkgName) ? "VPN 检测 · 点击更换" : "点击更换应用");
-        hint.setTextSize(13);
-        hint.setTextColor(IosUi.textSecondary(paper));
-        hint.setPadding(0, dp(2), 0, 0);
-        info.addView(hint);
-        card.setOnClickListener(
-            v -> {
-              dialog.dismiss();
-              pick(n, false);
-            });
-        TextView more = new TextView(this);
-        more.setText("⋯");
-        more.setTextSize(20);
-        more.setGravity(Gravity.CENTER);
-        more.setTextColor(IosUi.accent(paper));
-        more.setBackground(IosUi.roundRect(IosUi.pillColor(paper), 16, this));
-        more.setContentDescription("位置" + (n + 1) + "高级设置");
-        more.setOnClickListener(
-            v -> {
-              dialog.dismiss();
-              iconMenu(n);
-            });
-        card.addView(more, new LinearLayout.LayoutParams(dp(36), dp(36)));
       }
     }
   }
@@ -1368,6 +1609,185 @@ public class MainActivity extends Activity {
             "默认保护 ChatGPT / Grok / Gemini：先确认 Clash VPN 运行，再探测外网连通性与出口 IP 是否在安全节点范围内（默认日本 JP），异常时拦截进入并提示切换节点。",
             paper));
 
+    body.addView(IosUi.header(this, "短信转发", paper));
+    LinearLayout smsCard = IosUi.card(this, paper);
+
+    // 1. Bark channel (Apple push channel)
+    LinearLayout barkUrlRow =
+        IosUi.disclosureRow(
+            this,
+            "1. Bark 推送（苹果手机通道）",
+            SmsBarkForwarder.maskEndpoint(p.getString(SmsBarkForwarder.PREF_ENDPOINT, "")),
+            paper,
+            false,
+            () -> {});
+    final TextView barkUrlVal = (TextView) barkUrlRow.getChildAt(1);
+    smsCard.addView(barkUrlRow);
+
+    LinearLayout barkActionRow = new LinearLayout(this);
+    barkActionRow.setGravity(Gravity.CENTER_VERTICAL);
+    barkActionRow.setPadding(dp(16), dp(4), dp(16), dp(12));
+    final TextView barkState = new TextView(this);
+    barkState.setTextSize(13);
+    barkActionRow.addView(barkState, new LinearLayout.LayoutParams(0, -2, 1f));
+    final TextView barkBtnOn = createActionPill("开启", paper);
+    final TextView barkBtnOff = createActionPill("关闭", paper);
+    final TextView barkBtnTest = createActionPill("测试", paper);
+    LinearLayout.LayoutParams pillGap1 = new LinearLayout.LayoutParams(-2, -2);
+    pillGap1.leftMargin = dp(8);
+    LinearLayout.LayoutParams pillGap2 = new LinearLayout.LayoutParams(-2, -2);
+    pillGap2.leftMargin = dp(8);
+    barkActionRow.addView(barkBtnOn);
+    barkActionRow.addView(barkBtnOff, pillGap1);
+    barkActionRow.addView(barkBtnTest, pillGap2);
+    smsCard.addView(barkActionRow);
+
+    final Runnable refreshBarkUi =
+        () -> {
+          boolean en = p.getBoolean(SmsBarkForwarder.PREF_ENABLED, false);
+          boolean cfg =
+              !SmsBarkForwarder.normalizeEndpoint(p.getString(SmsBarkForwarder.PREF_ENDPOINT, ""))
+                  .isEmpty();
+          updateChannelButtons(en, cfg, paper, barkState, barkBtnOn, barkBtnOff);
+        };
+    refreshBarkUi.run();
+    barkUrlRow.setOnClickListener(v -> editSmsBarkEndpoint(barkUrlVal, refreshBarkUi));
+    barkBtnOn.setOnClickListener(
+        v -> {
+          p.edit().putBoolean(SmsBarkForwarder.PREF_ENABLED, true).apply();
+          ensureSmsPermissions();
+          SmsBarkForwarder.onPreferencesUpdated(this);
+          refreshBarkUi.run();
+          if (SmsBarkForwarder.normalizeEndpoint(p.getString(SmsBarkForwarder.PREF_ENDPOINT, ""))
+              .isEmpty()) {
+            editSmsBarkEndpoint(barkUrlVal, refreshBarkUi);
+          }
+        });
+    barkBtnOff.setOnClickListener(
+        v -> {
+          p.edit().putBoolean(SmsBarkForwarder.PREF_ENABLED, false).apply();
+          refreshBarkUi.run();
+        });
+    barkBtnTest.setOnClickListener(
+        v -> {
+          if (SmsBarkForwarder.normalizeEndpoint(p.getString(SmsBarkForwarder.PREF_ENDPOINT, ""))
+              .isEmpty()) {
+            editSmsBarkEndpoint(barkUrlVal, refreshBarkUi);
+            return;
+          }
+          barkBtnTest.setText("发送中…");
+          barkBtnTest.setEnabled(false);
+          SmsBarkForwarder.sendTestBark(
+              this,
+              msg -> {
+                if (!isDestroyed() && !isFinishing()) {
+                  barkBtnTest.setText("测试");
+                  barkBtnTest.setEnabled(true);
+                  Toast.makeText(this, msg, 1).show();
+                }
+              });
+        });
+
+    smsCard.addView(IosUi.divider(this, paper));
+
+    // 2. Webhook channel
+    LinearLayout webhookUrlRow =
+        IosUi.disclosureRow(
+            this,
+            "2. Webhook 推送",
+            SmsBarkForwarder.maskWebhookUrl(p.getString(SmsBarkForwarder.PREF_WEBHOOK_URL, "")),
+            paper,
+            false,
+            () -> {});
+    final TextView webhookUrlVal = (TextView) webhookUrlRow.getChildAt(1);
+    smsCard.addView(webhookUrlRow);
+
+    LinearLayout webhookActionRow = new LinearLayout(this);
+    webhookActionRow.setGravity(Gravity.CENTER_VERTICAL);
+    webhookActionRow.setPadding(dp(16), dp(4), dp(16), dp(12));
+    final TextView webhookState = new TextView(this);
+    webhookState.setTextSize(13);
+    webhookActionRow.addView(webhookState, new LinearLayout.LayoutParams(0, -2, 1f));
+    final TextView webhookBtnOn = createActionPill("开启", paper);
+    final TextView webhookBtnOff = createActionPill("关闭", paper);
+    final TextView webhookBtnTest = createActionPill("测试", paper);
+    LinearLayout.LayoutParams wGap1 = new LinearLayout.LayoutParams(-2, -2);
+    wGap1.leftMargin = dp(8);
+    LinearLayout.LayoutParams wGap2 = new LinearLayout.LayoutParams(-2, -2);
+    wGap2.leftMargin = dp(8);
+    webhookActionRow.addView(webhookBtnOn);
+    webhookActionRow.addView(webhookBtnOff, wGap1);
+    webhookActionRow.addView(webhookBtnTest, wGap2);
+    smsCard.addView(webhookActionRow);
+
+    final Runnable refreshWebhookUi =
+        () -> {
+          boolean en = p.getBoolean(SmsBarkForwarder.PREF_WEBHOOK_ENABLED, false);
+          boolean cfg =
+              !SmsBarkForwarder.normalizeWebhookUrl(
+                      p.getString(SmsBarkForwarder.PREF_WEBHOOK_URL, ""))
+                  .isEmpty();
+          updateChannelButtons(en, cfg, paper, webhookState, webhookBtnOn, webhookBtnOff);
+        };
+    refreshWebhookUi.run();
+    webhookUrlRow.setOnClickListener(v -> editSmsWebhookUrl(webhookUrlVal, refreshWebhookUi));
+    webhookBtnOn.setOnClickListener(
+        v -> {
+          p.edit().putBoolean(SmsBarkForwarder.PREF_WEBHOOK_ENABLED, true).apply();
+          ensureSmsPermissions();
+          SmsBarkForwarder.onPreferencesUpdated(this);
+          refreshWebhookUi.run();
+          if (SmsBarkForwarder.normalizeWebhookUrl(
+                  p.getString(SmsBarkForwarder.PREF_WEBHOOK_URL, ""))
+              .isEmpty()) {
+            editSmsWebhookUrl(webhookUrlVal, refreshWebhookUi);
+          }
+        });
+    webhookBtnOff.setOnClickListener(
+        v -> {
+          p.edit().putBoolean(SmsBarkForwarder.PREF_WEBHOOK_ENABLED, false).apply();
+          refreshWebhookUi.run();
+        });
+    webhookBtnTest.setOnClickListener(
+        v -> {
+          if (SmsBarkForwarder.normalizeWebhookUrl(
+                  p.getString(SmsBarkForwarder.PREF_WEBHOOK_URL, ""))
+              .isEmpty()) {
+            editSmsWebhookUrl(webhookUrlVal, refreshWebhookUi);
+            return;
+          }
+          webhookBtnTest.setText("发送中…");
+          webhookBtnTest.setEnabled(false);
+          SmsBarkForwarder.sendTestWebhook(
+              this,
+              msg -> {
+                if (!isDestroyed() && !isFinishing()) {
+                  webhookBtnTest.setText("测试");
+                  webhookBtnTest.setEnabled(true);
+                  Toast.makeText(this, msg, 1).show();
+                }
+              });
+        });
+
+    smsCard.addView(IosUi.divider(this, paper));
+    LinearLayout barkSourceRow =
+        IosUi.disclosureRow(
+            this,
+            "来源标记",
+            SmsBarkForwarder.resolveSourceTag(p),
+            paper,
+            false,
+            () -> {});
+    TextView barkSourceVal = (TextView) barkSourceRow.getChildAt(1);
+    barkSourceRow.setOnClickListener(v -> editSmsBarkSource(barkSourceVal));
+    smsCard.addView(barkSourceRow);
+    body.addView(smsCard);
+    body.addView(
+        IosUi.footer(
+            this,
+            "Bark 与 Webhook 两个渠道可独立配置并支持同时开启；采用高优先级短信广播 + 收件箱观察者双通道去重、按渠道持久化重试队列与唤醒锁保活，断网恢复自动补发。",
+            paper));
+
     body.addView(IosUi.header(this, "软件更新", paper));
     LinearLayout updateCard = IosUi.card(this, paper);
     updateCard.addView(
@@ -1528,6 +1948,7 @@ public class MainActivity extends Activity {
       RadioButton radio = new RadioButton(this);
       radio.setId(100 + i);
       radio.setText(choices[i]);
+      radio.setTextSize(14);
       modes.addView(radio, new RadioGroup.LayoutParams(0, -2, 1));
     }
     int initial = !p.getBoolean(event.key, true) ? 0 : event == ReminderEvent.CLEAN ? 1
@@ -1607,11 +2028,13 @@ public class MainActivity extends Activity {
     gallery.setOrientation(1);
     scroll.addView(gallery);
     content.addView(scroll, new LinearLayout.LayoutParams(-1, -1));
-    for (int r = 0; r < 4; r++) {
+    int cols = isPortrait() ? 2 : 3;
+    int rows = (labels.length + cols - 1) / cols;
+    for (int r = 0; r < rows; r++) {
       LinearLayout row = new LinearLayout(this);
       gallery.addView(row, new LinearLayout.LayoutParams(-1, dp(150)));
-      for (int c = 0; c < 3; c++) {
-        int index = r * 3 + c;
+      for (int c = 0; c < cols; c++) {
+        int index = r * cols + c;
         if (index >= labels.length) {
           row.addView(new View(this), new LinearLayout.LayoutParams(0, -1, 1));
           continue;

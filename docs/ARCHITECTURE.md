@@ -6,8 +6,9 @@ All code lives in `launcher-app/src/com/benbenyu/btquicklaunch`.
 
 | Class | Role |
 |---|---|
-| `MainActivity` | Landscape home screen, four app slots, ordering, wallpaper, themes, brightness, settings |
+| `MainActivity` | Adaptive landscape/portrait home screen, four app slots, ordering, wallpaper, themes, brightness, settings |
 | `ButtonService` | Accessibility key filter for the configured keyboard; double-press, three-key chord, voice button detection |
+| `SmsBarkForwarder` / `SmsForwardReceiver` | Dual-channel SMS forwarding (Bark + Webhook) with multipart PDU assembly, `_id` cursor dedup, persistent retry queue, and network-restore flush |
 | `ProxyGuard` | Local network, VPN interface, Clash process/port checks, plus optional exit-country probe via local Clash port |
 | `HidConnectionManager` | Handles HID/ACL broadcasts and notification sounds, polls state every second, and reconnects on a separate executor |
 | `RootHidProvider` / `RootHidConnect` | Restricted root bridge that performs the HID connect; provider is not exported and checks caller UID |

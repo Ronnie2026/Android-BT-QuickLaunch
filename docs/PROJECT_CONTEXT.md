@@ -2,11 +2,11 @@
 
 [简体中文](PROJECT_CONTEXT.zh-CN.md)
 
-Implementation baseline: v1.8.5. This document describes the shipped code, not a promise about future third-party app versions.
+Implementation baseline: v1.8.6. This document describes the shipped code, not a promise about future third-party app versions.
 
 ## Purpose and operating environment
 
-Android-BT-QuickLaunch reuses an Android phone as a dedicated in-car voice terminal. A small paired Bluetooth keyboard provides physical shortcuts to AI assistants and other selected apps, reducing the touchscreen steps needed to open them. The launcher is the phone's default home screen, with four configurable slots in landscape.
+Android-BT-QuickLaunch reuses an Android phone as a dedicated in-car voice terminal. A small paired Bluetooth keyboard provides physical shortcuts to AI assistants and other selected apps, reducing the touchscreen steps needed to open them. The launcher is the phone's default home screen, with four configurable slots (4-column row in landscape, 2×2 grid in portrait) and optional dual-channel SMS forwarding (Bark + Webhook).
 
 The priorities are predictable wake-and-launch behavior, visible feedback, offline reminders, and limited background work. The target device is a OnePlus 7T running Android 11 with Magisk root. This is a device-tuned project, not a universally compatible Android launcher. Root access does not guarantee that Android or the vendor will never stop a service.
 

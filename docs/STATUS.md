@@ -2,7 +2,13 @@
 
 [简体中文](STATUS.zh-CN.md)
 
-Version 1.8.5, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+Version 1.8.6, package `com.benbenyu.btquicklaunch`. Target device: OnePlus 7T (Android 11, Magisk).
+
+## v1.8.6 update
+- **Dual-channel SMS forwarding (Bark + Webhook)**: Added `SmsBarkForwarder` and high-priority `SmsForwardReceiver` (multipart PDU assembly, `ContentObserver`, and 60 s inbox reconciliation) using a strictly monotonic `_id > lastInboxId` cursor and 10-minute deduplication window to prevent duplicate sends. Added a **短信转发** section in General Settings with independent Bark (iOS push) and Webhook configuration, per-channel **开启 / 关闭 / 测试** controls, custom source tag (`来自安卓助理的通知` by default), persistent per-channel retry queue (`sms_bark_queue.json`), `PARTIAL_WAKE_LOCK`, exponential backoff, network-restore flush, and background keep-alive wiring in `HomeApplication`, `ButtonService`, and `phone-config/92-btquicklaunch.sh`.
+- **Portrait mode & Settings UI fixes**: Switched `MainActivity` to `fullUser` orientation with `onConfigurationChanged` redraw; added portrait 2×2 desktop grid with a 2-row right-aligned status bar, scrollable portrait app-slot settings, and a 2-column portrait wallpaper grid. Fixed `IosUi.disclosureRow()` portrait layout corruption (e.g., **事件提醒** rows) by constraining the summary label (`14sp`, `maxWidth` at 46% screen width, end ellipsize) and set `configureReminder()` radio options to `14sp`.
+- **Backup & logging**: Added `sms_bark_enabled`, `sms_bark_endpoint`, `sms_webhook_enabled`, `sms_webhook_url`, `sms_bark_source`, and `sms_bark_ttl` with URL/range validation to `ConfigBackup`, and updated `HomeApplication` `APP_START` logging to read `AppUpdater.currentVersion(this)` dynamically.
+- **Verification**: Passed all 7 local JVM checks (`SmsBarkChecks`, `ProxyGuardChecks`, `PowerIndicatorChecks`, `WifiBeaconChecks`, `NetIndicatorsChecks`, `ProcessStateChecks`, `SystemToneUriChecks`) and verified on OnePlus 7T (Android 11, Magisk): portrait/landscape UI and **事件提醒** layout, live Bark delivery without 3-minute repeats, `ButtonService` accessibility binding, 0 errors in daily log, and `0.19%` frame jank. Device `app_process` checks passed 11/12 (`HidStateChecks` line 47 failed due to pre-existing `HidConnectionManager.keyboardLowAnnounced` behavior across disconnect, unrelated to v1.8.6 changes).
 
 ## v1.8.5 update
 - Isolated background status-bar region probing (`regionWorker` + `uiHandler` + `AtomicBoolean`) from app-launch `networkWorker` / `cancelLaunch()` so status polling never drops queued launches or permanently wedges `vpnRegionChecking` / `busy`, and protected `AudioDeviceCallback` / `autoCheckIfDue` from launch cancellation.

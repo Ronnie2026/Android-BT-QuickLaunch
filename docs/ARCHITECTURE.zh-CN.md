@@ -6,8 +6,9 @@
 
 | 类 | 职责 |
 |---|---|
-| `MainActivity` | 横屏桌面、四个应用位、排序、壁纸、主题、亮度和设置 |
+| `MainActivity` | 横竖屏自适应桌面、四个应用位、排序、壁纸、主题、亮度和设置 |
 | `ButtonService` | 指定键盘的无障碍按键过滤、双击、三键组合及语音按钮检测 |
+| `SmsBarkForwarder`／`SmsForwardReceiver` | Bark 与 Webhook 双通道短信自动转发，含长短信拼接、`_id` 游标去重、本地持久化重试队列与网络恢复补发 |
 | `ProxyGuard` | 本地网络、VPN 接口、Clash 进程与回环端口检查，以及可选经本地代理端口的出口国家探测 |
 | `HidConnectionManager` | 处理 HID／ACL 广播和提醒音，每秒轮询状态，独立执行器回连 |
 | `RootHidProvider`／`RootHidConnect` | 受限 Root HID 连接桥接；Provider 不导出，并检查调用 UID |

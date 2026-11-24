@@ -22,7 +22,8 @@ The phone runs this launcher as its default home screen. A paired Bluetooth keyp
 
 ## Features
 
-- Fixed landscape home screen with four configurable app slots; long-press to swap slots
+- Adaptive landscape and portrait home screen with four configurable app slots (4-column row in landscape, 2×2 grid in portrait); long-press to swap slots
+- Dual-channel SMS forwarding (Bark for iOS push + custom Webhook): independent enable/disable/test controls in General Settings, simultaneous delivery, `_id`-based deduplication, and persistent retry queue with wake-lock protection
 - Bluetooth keypad shortcuts: double-press key 1/2/3 to open the first three slots; press all three keys to clear background apps and return home
 - ChatGPT / Gemini voice launch with local network and VPN/proxy checks; starts Clash Meta and re-checks when needed (no external connectivity probes)
 - Successful background cleanup displays Patrick Star with a large “搞定了” caption and an optional system confirmation tone; triggered by holding/double-tapping X or pressing all three keyboard keys.

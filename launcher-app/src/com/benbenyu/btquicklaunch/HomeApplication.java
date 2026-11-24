@@ -14,7 +14,8 @@ public class HomeApplication extends android.app.Application {
             System.exit(10);
           }
         });
-    AppLog.write("APP_START version=1.7.0", null);
+    AppLog.write("APP_START version=" + AppUpdater.currentVersion(this), null);
+    SmsBarkForwarder.ensureWatching(this);
     try {
       getPackageManager().getApplicationInfo("com.larus.nova", 0);
       android.content.SharedPreferences slots = getSharedPreferences("home", 0);

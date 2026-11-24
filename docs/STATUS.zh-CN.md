@@ -2,7 +2,13 @@
 
 [English (default)](STATUS.md)
 
-版本 1.8.5，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+版本 1.8.6，包名 `com.benbenyu.btquicklaunch`。目标设备：一加 7T（Android 11、Magisk）。
+
+## v1.8.6 更新说明
+- **双通道短信转发（Bark + Webhook）**：新增 `SmsBarkForwarder` 与高优先级 `SmsForwardReceiver`（支持长短信多 PDU 拼接、`ContentObserver` 监听及 60 秒收件箱兜底扫描），采用严格单调递增的数据库主键 `_id > lastInboxId` 游标与 10 分钟去重窗口，彻底避免重复推送。在 **通用设置 -> 短信转发** 中支持独立配置 Bark（iOS 推送）与 Webhook 通道，分别提供 **开启 / 关闭 / 测试** 按钮及来源标记（默认 `来自安卓助理的通知`），内置通道级持久化重试队列（`sms_bark_queue.json`）、`PARTIAL_WAKE_LOCK`、指数退避与网络恢复自动补发，并在 `HomeApplication`、`ButtonService` 与 `phone-config/92-btquicklaunch.sh` 中补齐短信权限、电池白名单与后台保活。
+- **竖屏模式兼容与设置页错乱修复**：`MainActivity` 改为 `fullUser` 自适应方向并处理 `onConfigurationChanged` 重绘；竖屏下自动切换为 2×2 桌面网格与两行右对齐状态栏，启动应用设置改为可滚动列表、壁纸选择改为 2 列网格。修复 `IosUi.disclosureRow()` 在竖屏下右侧长摘要挤压左侧标题导致错乱的问题（为右侧摘要设置 `14sp`、`46%` 屏宽上限 `maxWidth` 及末尾省略），并将事件提醒弹窗单选文字调整为 `14sp`。
+- **配置备份与日志改进**：`ConfigBackup` 接入 `sms_bark_enabled`、`sms_bark_endpoint`、`sms_webhook_enabled`、`sms_webhook_url`、`sms_bark_source`、`sms_bark_ttl` 备份及 URL/范围校验；`HomeApplication` 启动日志改用 `AppUpdater.currentVersion(this)` 动态读取版本号。
+- **验证结果**：本地 7 项 JVM 检查（`SmsBarkChecks`、`ProxyGuardChecks`、`PowerIndicatorChecks`、`WifiBeaconChecks`、`NetIndicatorsChecks`、`ProcessStateChecks`、`SystemToneUriChecks`）全部通过；一加 7T（Android 11、Magisk）真机验证横竖屏桌面及 **事件提醒** 排版正常、Bark 真实推送正常且无 3 分钟重复发送、无障碍服务绑定正常、当日日志零报错、渲染掉帧率 `0.19%`。真机 `app_process` 回归 11/12 通过（`HidStateChecks` 第 47 行因 `HidConnectionManager.keyboardLowAnnounced` 既有低电量防重复逻辑断言失败，与本次改动无关）。
 
 ## v1.8.5 更新说明
 - 将状态栏出口区域后台探测拆分至独立 `regionWorker`、`uiHandler` 与 `AtomicBoolean`，与应用启动 `networkWorker` 及 `cancelLaunch()` 隔离，修复并发队列丢弃导致启动无响应、`busy`/`vpnRegionChecking` 永久卡死以及 `cancelLaunch()` 误删蓝牙音频与自动更新回调的问题。
